@@ -1,36 +1,24 @@
 <resources>
     <string name="app_name">Smutty</string>
+
+    <!-- Strings for OptionsMenu -->
     <string name="settings_label">Settings</string>
     <string name="refresh_label">Refresh</string>
     <string name="share_label">Share</string>
-    <string name="title_activity_settings">Settings</string>
 
     <!-- Strings related to Settings -->
+    <string name="title_activity_settings">Settings</string>
 
-    <!-- Example General settings -->
+    <!-- Strings related to General Settings -->
     <string name="pref_header_general">General</string>
 
-    <string name="pref_title_social_recommendations">Enable social recommendations</string>
-    <string name="pref_description_social_recommendations">Recommendations for people to contact
-        based on your message history
-    </string>
+    <string name="pref_title_show_tags">Show tags</string>
+    <string name="pref_description_show_tags">Displayed at the bottom of the screen</string>
 
-    <string name="pref_title_display_name">Display name</string>
-    <string name="pref_default_display_name">John Smith</string>
+    <string name="pref_title_show_submitter">Show Submitter</string>
+    <string name="pref_description_show_submitter">Displayed at the top of the screen</string>
 
-    <string name="pref_title_add_friends_to_messages">Add friends to messages</string>
-    <string-array name="pref_example_list_titles">
-        <item>Always</item>
-        <item>When possible</item>
-        <item>Never</item>
-    </string-array>
-    <string-array name="pref_example_list_values">
-        <item>1</item>
-        <item>0</item>
-        <item>-1</item>
-    </string-array>
-
-    <!-- Example settings for Data & Sync -->
+    <!-- Settings for Data & Sync -->
     <string name="pref_header_data_sync">Data &amp; sync</string>
 
     <string name="pref_title_sync_frequency">Sync frequency</string>
@@ -51,29 +39,13 @@
         <item>-1</item>
     </string-array>
 
-    <string-array name="list_preference_entries">
-        <item>Entry 1</item>
-        <item>Entry 2</item>
-        <item>Entry 3</item>
-    </string-array>
+    <string name="pref_title_sync_url">Sync URL</string>
 
-    <string-array name="list_preference_entry_values">
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-    </string-array>
-
-    <string-array name="multi_select_list_preference_default_value" />
-
-    <string name="pref_title_system_sync_settings">System sync settings</string>
-
-    <!-- Example settings for Notifications -->
+    <!-- Settings for Notifications -->
     <string name="pref_header_notifications">Notifications</string>
-
     <string name="pref_title_new_message_notifications">New message notifications</string>
-
     <string name="pref_title_ringtone">Ringtone</string>
-    <string name="pref_ringtone_silent">Silent</string>
-
     <string name="pref_title_vibrate">Vibrate</string>
+    <string name="pref_ringtone_silent">Silent</string><!-- referenced in SettingsActivity -->
+
 </resources>
