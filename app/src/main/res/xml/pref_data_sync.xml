@@ -13,9 +13,24 @@
         android:title="@string/pref_title_sync_frequency" />
     <EditTextPreference
         android:hint="http(s):// ... /index.json.xz"
+        android:inputType="textUri"
         android:key="sync_url"
         android:selectAllOnFocus="true"
         android:singleLine="true"
         android:title="@string/pref_title_sync_url" />
+    <EditTextPreference
+        android:defaultValue="100"
+        android:inputType="number"
+        android:key="prefetch_mbytes"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/pref_title_prefetch_mbytes" />
+    <EditTextPreference
+        android:defaultValue="2000"
+        android:inputType="number"
+        android:key="storage_mbytes"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="@string/pref_title_storage_mbytes" />
 
 </PreferenceScreen>

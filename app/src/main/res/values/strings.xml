@@ -41,6 +41,10 @@
 
     <string name="pref_title_sync_url">Sync URL</string>
 
+    <string name="pref_title_prefetch_mbytes">Prefetch size (MB)</string>
+
+    <string name="pref_title_storage_mbytes">Storage limit (MB)</string>
+
     <!-- Settings for Notifications -->
     <string name="pref_header_notifications">Notifications</string>
     <string name="pref_title_new_message_notifications">New message notifications</string>

@@ -251,6 +251,8 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             // guidelines.
             bindPreferenceSummaryToValue(findPreference("sync_frequency"));
             bindPreferenceSummaryToValue(findPreference("sync_url"));
+            bindPreferenceSummaryToValue(findPreference("prefetch_mbytes"));
+            bindPreferenceSummaryToValue(findPreference("storage_mbytes"));
         }
 
         @Override
