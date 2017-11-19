@@ -1,15 +1,22 @@
 package io.github.smutty_tools.smutty_viewer;
 
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.EditText;
 import android.widget.Toast;
 
 /**
@@ -27,13 +34,30 @@ public class MainActivity extends AppCompatActivity implements DownloadCallbackI
     // downloads with consecutive button clicks.
     private boolean mDownloading = false;
 
+    // Class handling terminated downloads
+    private BroadcastReceiver onComplete = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.d(TAG, "onReceive");
+            long referenceId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+            Log.d(TAG, Long.toString(referenceId));
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mNetworkFragment = NetworkFragment.getInstance(
-                getSupportFragmentManager(),
-                "https://ip.appspot.com/");
+        // load fragment for AsyncTask-based download
+        mNetworkFragment = NetworkFragment.getInstance(getSupportFragmentManager(), "https://ip.appspot.com/");
+        // callback for DownloadManager finished downloads
+        registerReceiver(onComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+    }
+
+    @Override
+    protected void onDestroy() {
+        unregisterReceiver(onComplete);
+        super.onDestroy();
     }
 
     @Override
@@ -141,6 +165,33 @@ public class MainActivity extends AppCompatActivity implements DownloadCallbackI
         if (mNetworkFragment != null) {
             mNetworkFragment.cancelDownload();
         }
+    }
+
+    public void downloadUrl(View view) {
+        DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+        Log.d(TAG, "downloadURL");
+        Log.d(TAG, Environment.DIRECTORY_DOWNLOADS);
+        EditText editTextUrl = findViewById(R.id.edittextUrl);
+        String url = editTextUrl.getText().toString();
+        if (url.length() == 0) {
+            showToastMessage("Empty url");
+            return;
+        }
+        Uri uri = Uri.parse(url);
+        DownloadManager.Request request = new DownloadManager.Request(uri)
+                .setTitle("test url title")
+                .setDescription("test url descr" + url)
+                // TODO: setAllowedOverMetered based on wifi setting, defaults to true
+                .setVisibleInDownloadsUi(true)
+                // getExternalFilesDir("toto") = /storage/emulated/0/Android/data/io.github.smutty_tools.smutty_viewer/files/toto
+                // getExternalCacheDir() = /storage/emulated/0/Android/data/io.github.smutty_tools.smutty_viewer/cache
+                // Environment.getExternalStoragePublicDirectory("toto") = /storage/emulated/0/toto
+                // getApplicationInfo().dataDir = /data/data/io.github.smutty_tools.smutty_viewer
+                // getFilesDir() = /data/data/io.github.smutty_tools.smutty_viewer/files
+                .setDestinationInExternalFilesDir(this, "toto", "titi");
+
+        long ref_id = downloadManager.enqueue(request);
+        Log.d(TAG, Long.toString(ref_id));
     }
 }
 
