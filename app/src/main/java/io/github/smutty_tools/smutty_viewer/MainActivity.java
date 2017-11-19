@@ -4,22 +4,36 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
-public class MainActivity extends AppCompatActivity {
+/**
+ * Main activity class
+ */
+public class MainActivity extends AppCompatActivity implements DownloadCallbackInterface<String> {
 
-    private static final String DEBUG_TAG = "MainActivity";
+    private static final String TAG = "MainActivity";
+
+    // Keep a reference to the NetworkFragment, which owns the AsyncTask object
+    // that is used to execute network ops.
+    private NetworkFragment mNetworkFragment;
+
+    // Boolean telling us whether a download is in progress, so we don't trigger overlapping
+    // downloads with consecutive button clicks.
+    private boolean mDownloading = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        mNetworkFragment = NetworkFragment.getInstance(
+                getSupportFragmentManager(),
+                "https://ip.appspot.com/");
     }
 
     @Override
@@ -46,17 +60,33 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-//    @Override
+    @Override
     public NetworkInfo getActiveNetworkInfo() {
         ConnectivityManager connectivityManager =
                 (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
         if (networkInfo == null) {
-            Log.d(DEBUG_TAG, "No network available");
+            Log.d(TAG, "No network available");
         } else {
-            Log.d(DEBUG_TAG, networkInfo.toString());
+            Log.d(TAG, networkInfo.toString());
         }
         return networkInfo;
+    }
+
+    private void startDownload() {
+        if (mNetworkFragment == null) {
+            showToastMessage("No network fragment available");
+            return;
+        }
+        if (mDownloading) {
+            showToastMessage("A synchronization alread in progress");
+            return;
+        }
+        // mark synchronization as in progress
+        mDownloading = true;
+        showToastMessage("Synchronization started");
+        // start the download task
+        mNetworkFragment.startDownload();
     }
 
     public void showToastMessage(String message) {
@@ -68,18 +98,65 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void refreshAction() {
-
-//        one of TYPE_MOBILE, TYPE_WIFI, TYPE_WIMAX, TYPE_ETHERNET, TYPE_BLUETOOTH
         NetworkInfo ni = getActiveNetworkInfo();
         if (ni == null || !ni.isConnected()) {
             showToastMessage(getString(R.string.toast_network_unavailable));
+            return;
         }
-
-
-        // TODO: check for connectivity
+        startDownload();
         // TODO: fetch metadata
         // TODO: fetch latest indexes
         // TODO: fetch content
         // TODO: ...
     }
+
+    @Override
+    public void updateFromDownload(String result) {
+        Log.i(TAG, result);
+    }
+
+    @Override
+    public void onProgressUpdate(int progressCode, int percentComplete) {
+        Log.d(TAG, Integer.toString(progressCode));
+        Log.d(TAG, Integer.toString(percentComplete));
+        switch(progressCode) {
+            // You can add UI behavior for progress updates here.
+            case Progress.ERROR:
+                break;
+            case Progress.CONNECT_SUCCESS:
+                break;
+            case Progress.GET_INPUT_STREAM_SUCCESS:
+                break;
+            case Progress.PROCESS_INPUT_STREAM_IN_PROGRESS:
+                break;
+            case Progress.PROCESS_INPUT_STREAM_SUCCESS:
+                break;
+        }
+    }
+
+    @Override
+    public void finishDownloading() {
+        Log.v(TAG, "finishDownloading");
+        mDownloading = false;
+        if (mNetworkFragment != null) {
+            mNetworkFragment.cancelDownload();
+        }
+    }
 }
+
+
+
+
+
+
+
+/*
+The sequence of events in the code so far is as follows:
+The Activity starts a NetworkFragment and passes in a specified URL.
+When a user action triggers the Activity's downloadData() method, the NetworkFragment executes the DownloadTask.
+The AsyncTask method onPreExecute() runs first (on the UI thread) and cancels the task if the device is not connected to the Internet.
+The AsyncTask method doInBackground() then runs on the background thread and calls the downloadUrl() method.
+The downloadUrl() method takes a URL string as a parameter and uses an HttpsURLConnection object to fetch the web content as an InputStream.
+The InputStream is passed to the readStream() method, which converts the stream to a string.
+Finally, once the background work is complete, the AsyncTask's onPostExecute() method runs on the UI thread and uses the DownloadCallback to send the result back to the UI as a String.
+*/
