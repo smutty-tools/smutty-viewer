@@ -1,15 +1,15 @@
 package io.github.smutty_tools.smutty_viewer;
 
+
 import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
+import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
@@ -19,44 +19,40 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import java.security.InvalidParameterException;
+import java.security.NoSuchAlgorithmException;
+
 /**
  * Main activity class
  */
-public class MainActivity extends AppCompatActivity implements DownloadCallbackInterface<String> {
+public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
 
-    // Keep a reference to the NetworkFragment, which owns the AsyncTask object
-    // that is used to execute network ops.
-    private NetworkFragment mNetworkFragment;
-
-    // Boolean telling us whether a download is in progress, so we don't trigger overlapping
-    // downloads with consecutive button clicks.
-    private boolean mDownloading = false;
-
-    // Class handling terminated downloads
-    private BroadcastReceiver onComplete = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Log.d(TAG, "onReceive");
-            long referenceId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-            Log.d(TAG, Long.toString(referenceId));
-        }
-    };
+    private Downloader downloader = null;
+    private SharedPreferences settings = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        // load fragment for AsyncTask-based download
-        mNetworkFragment = NetworkFragment.getInstance(getSupportFragmentManager(), "https://ip.appspot.com/");
-        // callback for DownloadManager finished downloads
-        registerReceiver(onComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        // our download manager wrapper
+        try {
+            downloader = new Downloader(this);
+        } catch (NoSuchAlgorithmException e) {
+            showToastMessage(e.getMessage());
+            downloader = null;
+        }
+        // accesses settings
+        settings = PreferenceManager.getDefaultSharedPreferences(this);
+        // callback for finished downloads
+        registerReceiver(downloader, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
     }
 
     @Override
     protected void onDestroy() {
-        unregisterReceiver(onComplete);
+        // callback for finished downloads
+        unregisterReceiver(downloader);
         super.onDestroy();
     }
 
@@ -84,33 +80,13 @@ public class MainActivity extends AppCompatActivity implements DownloadCallbackI
         }
     }
 
-    @Override
     public NetworkInfo getActiveNetworkInfo() {
-        ConnectivityManager connectivityManager =
-                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-        if (networkInfo == null) {
-            Log.d(TAG, "No network available");
-        } else {
-            Log.d(TAG, networkInfo.toString());
+        ConnectivityManager connectivityManager = (ConnectivityManager)
+                getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null) {
+            return null;
         }
-        return networkInfo;
-    }
-
-    private void startDownload() {
-        if (mNetworkFragment == null) {
-            showToastMessage("No network fragment available");
-            return;
-        }
-        if (mDownloading) {
-            showToastMessage("A synchronization alread in progress");
-            return;
-        }
-        // mark synchronization as in progress
-        mDownloading = true;
-        showToastMessage("Synchronization started");
-        // start the download task
-        mNetworkFragment.startDownload();
+        return connectivityManager.getActiveNetworkInfo();
     }
 
     public void showToastMessage(String message) {
@@ -123,91 +99,43 @@ public class MainActivity extends AppCompatActivity implements DownloadCallbackI
 
     private void refreshAction() {
         NetworkInfo ni = getActiveNetworkInfo();
+        // check connectivity
         if (ni == null || !ni.isConnected()) {
             showToastMessage(getString(R.string.toast_network_unavailable));
             return;
         }
-        startDownload();
-        // TODO: fetch metadata
-        // TODO: fetch latest indexes
-        // TODO: fetch content
-        // TODO: ...
-    }
-
-    @Override
-    public void updateFromDownload(String result) {
-        Log.i(TAG, result);
-    }
-
-    @Override
-    public void onProgressUpdate(int progressCode, int percentComplete) {
-        Log.d(TAG, Integer.toString(progressCode));
-        Log.d(TAG, Integer.toString(percentComplete));
-        switch(progressCode) {
-            // You can add UI behavior for progress updates here.
-            case Progress.ERROR:
-                break;
-            case Progress.CONNECT_SUCCESS:
-                break;
-            case Progress.GET_INPUT_STREAM_SUCCESS:
-                break;
-            case Progress.PROCESS_INPUT_STREAM_IN_PROGRESS:
-                break;
-            case Progress.PROCESS_INPUT_STREAM_SUCCESS:
-                break;
+        // check wifi restrictions
+        boolean sync_only_on_wifi = settings.getBoolean("sync_only_on_wifi", false);
+        if (sync_only_on_wifi && ni.getType() != ConnectivityManager.TYPE_WIFI) {
+            showToastMessage("Synchronization allowed only on wifi");
+            return;
         }
-    }
-
-    @Override
-    public void finishDownloading() {
-        Log.v(TAG, "finishDownloading");
-        mDownloading = false;
-        if (mNetworkFragment != null) {
-            mNetworkFragment.cancelDownload();
+        // download index file
+        String indexUrl = settings.getString("sync_url", null);
+        if (indexUrl == null || indexUrl.length() == 0) {
+            showToastMessage("Sync URL not provided");
+            return;
         }
+        // actually start download
+        downloadAction(indexUrl);
     }
 
     public void downloadUrl(View view) {
-        DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-        Log.d(TAG, "downloadURL");
-        Log.d(TAG, Environment.DIRECTORY_DOWNLOADS);
         EditText editTextUrl = findViewById(R.id.edittextUrl);
         String url = editTextUrl.getText().toString();
-        if (url.length() == 0) {
-            showToastMessage("Empty url");
+        downloadAction(url);
+    }
+
+    public void downloadAction(String url) {
+        if (downloader == null) {
+            showToastMessage("Downloader is unavailable");
             return;
         }
-        Uri uri = Uri.parse(url);
-        DownloadManager.Request request = new DownloadManager.Request(uri)
-                .setTitle("test url title")
-                .setDescription("test url descr" + url)
-                // TODO: setAllowedOverMetered based on wifi setting, defaults to true
-                .setVisibleInDownloadsUi(true)
-                // getExternalFilesDir("toto") = /storage/emulated/0/Android/data/io.github.smutty_tools.smutty_viewer/files/toto
-                // getExternalCacheDir() = /storage/emulated/0/Android/data/io.github.smutty_tools.smutty_viewer/cache
-                // Environment.getExternalStoragePublicDirectory("toto") = /storage/emulated/0/toto
-                // getApplicationInfo().dataDir = /data/data/io.github.smutty_tools.smutty_viewer
-                // getFilesDir() = /data/data/io.github.smutty_tools.smutty_viewer/files
-                .setDestinationInExternalFilesDir(this, "toto", "titi");
-
-        long ref_id = downloadManager.enqueue(request);
-        Log.d(TAG, Long.toString(ref_id));
+        // actually start download
+        try {
+            downloader.queue(url, "test_subdirectory");
+        } catch (InvalidParameterException e) {
+            showToastMessage(e.getMessage());
+        }
     }
 }
-
-
-
-
-
-
-
-/*
-The sequence of events in the code so far is as follows:
-The Activity starts a NetworkFragment and passes in a specified URL.
-When a user action triggers the Activity's downloadData() method, the NetworkFragment executes the DownloadTask.
-The AsyncTask method onPreExecute() runs first (on the UI thread) and cancels the task if the device is not connected to the Internet.
-The AsyncTask method doInBackground() then runs on the background thread and calls the downloadUrl() method.
-The downloadUrl() method takes a URL string as a parameter and uses an HttpsURLConnection object to fetch the web content as an InputStream.
-The InputStream is passed to the readStream() method, which converts the stream to a string.
-Finally, once the background work is complete, the AsyncTask's onPostExecute() method runs on the UI thread and uses the DownloadCallback to send the result back to the UI as a String.
-*/
