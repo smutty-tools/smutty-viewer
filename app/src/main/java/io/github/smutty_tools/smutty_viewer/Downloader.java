@@ -9,7 +9,10 @@ import android.net.Uri;
 import android.util.Log;
 import android.util.LongSparseArray;
 
+import java.io.File;
 import java.math.BigInteger;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.InvalidParameterException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -30,13 +33,13 @@ public class Downloader {
     public class Info {
         private Uri uri;
         private String targetSubDirectory;
-        private int action_id;
+        private int actionId;
         private long downloadId;
 
-        public Info(Uri uri, String targetSubDirectory, int actionType) {
+        public Info(Uri uri, String targetSubDirectory, int actionId) {
             this.uri = uri;
             this.targetSubDirectory = targetSubDirectory;
-            this.action_id = actionType;
+            this.actionId = actionId;
             this.downloadId = -1;
         }
 
@@ -100,11 +103,11 @@ public class Downloader {
             Log.d(TAG, "Download ID not provided");
             return;
         }
-        Log.d(TAG, Long.toString(downloadId));
+        Log.d(TAG, "Finalizing download id " + Long.toString(downloadId));
         // find our own info
         Info info = downloads.get(downloadId);
         if (info == null) {
-            Log.d(TAG, "Download absent from known download list, ignore and remove it from DownloadManager");
+            Log.i(TAG, "Download absent from known download list, ignore and remove it from DownloadManager");
             downloadManager.remove(downloadId);
             return;
         }
@@ -112,19 +115,20 @@ public class Downloader {
         DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
         Cursor cursor = downloadManager.query(query);
         if (!cursor.moveToFirst()) {
-            Log.d(TAG,"No download found for this ID in DownloadManager");
+            Log.i(TAG,"No download found for this ID in DownloadManager");
             return;
         }
         int column_local_uri = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-        String local_uri = cursor.getString(column_local_uri);
-        if (local_uri != null) {
-            Log.d(TAG, "Local URI: " + local_uri);
-        } else {
-            Log.d(TAG, "Local URI: null");
-        }
         int column_status = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
+        String local_uri = cursor.getString(column_local_uri);
+        int status = cursor.getInt(column_status);
+        cursor.close();
+        if (local_uri == null) {
+            Log.e(TAG, "Local URI: null");
+            return;
+        }
         // analyze status
-        switch(cursor.getInt(column_status)) {
+        switch(status) {
             case DownloadManager.STATUS_FAILED:
                 Log.d(TAG, "Download failed");
                 break;
@@ -139,10 +143,22 @@ public class Downloader {
                 break;
             case DownloadManager.STATUS_SUCCESSFUL:
                 Log.d(TAG, "Download successful");
+                URI uri = null;
+                try {
+                    uri = new URI(local_uri);
+                } catch (URISyntaxException e) {
+                    Log.e(TAG, e.getMessage());
+                    break;
+                }
+                File src = new File(uri);
+                File dstDirectory = parentContext.getExternalFilesDir(info.targetSubDirectory);
+                // TODO: generated destination name
+                File dst = new File(dstDirectory, "toto");
+                boolean result  = src.renameTo(dst);
+                Log.d(TAG, "src " + src.toString() + " dst " + dst.toString() + " result " + Boolean.toString(result));
                 break;
         }
-        cursor.close();
-        // prune download
+        // prune provided download
         downloadManager.remove(downloadId);
         // list remaining downloads
         query = new DownloadManager.Query();
