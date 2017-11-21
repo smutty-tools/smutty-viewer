@@ -17,9 +17,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.Toast;
 
-import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 
 /**
@@ -31,10 +29,15 @@ public class MainActivity extends AppCompatActivity {
 
     private Downloader downloader = null;
     private SharedPreferences settings = null;
+    private Toaster toaster = null;
 
     BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            if (downloader == null) {
+                toaster.display("Downloader is unavailable");
+                return;
+            }
             long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
             downloader.finalize(downloadId);
         }
@@ -44,11 +47,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        // our toaster for messages
+        toaster = new Toaster(this);
         // our download manager wrapper
         try {
-            downloader = new Downloader(this);
+            downloader = new Downloader(this, toaster);
         } catch (NoSuchAlgorithmException e) {
-            showToastMessage(e.getMessage());
+            toaster.display(e.getMessage());
             downloader = null;
         }
         // accesses settings
@@ -97,31 +102,23 @@ public class MainActivity extends AppCompatActivity {
         return connectivityManager.getActiveNetworkInfo();
     }
 
-    public void showToastMessage(String message) {
-        Context context = getApplicationContext();
-        CharSequence text = message;
-        int duration = Toast.LENGTH_SHORT;
-        Toast toast = Toast.makeText(context, text, duration);
-        toast.show();
-    }
-
     private void refreshAction() {
         NetworkInfo ni = getActiveNetworkInfo();
         // check connectivity
         if (ni == null || !ni.isConnected()) {
-            showToastMessage(getString(R.string.toast_network_unavailable));
+            toaster.display(getString(R.string.toast_network_unavailable));
             return;
         }
         // check wifi restrictions
         boolean sync_only_on_wifi = settings.getBoolean("sync_only_on_wifi", false);
         if (sync_only_on_wifi && ni.getType() != ConnectivityManager.TYPE_WIFI) {
-            showToastMessage("Synchronization allowed only on wifi");
+            toaster.display("Synchronization allowed only on wifi");
             return;
         }
         // download index file
         String indexUrl = settings.getString("sync_url", null);
         if (indexUrl == null || indexUrl.length() == 0) {
-            showToastMessage("Sync URL not provided");
+            toaster.display("Sync URL not provided");
             return;
         }
         // actually start download
@@ -136,14 +133,10 @@ public class MainActivity extends AppCompatActivity {
 
     public void downloadAction(String url) {
         if (downloader == null) {
-            showToastMessage("Downloader is unavailable");
+            toaster.display("Downloader is unavailable");
             return;
         }
         // actually start download
-        try {
-            downloader.queue(url, "test_subdirectory");
-        } catch (InvalidParameterException e) {
-            showToastMessage(e.getMessage());
-        }
+        downloader.queue(url, "test_subdirectory");
     }
 }
