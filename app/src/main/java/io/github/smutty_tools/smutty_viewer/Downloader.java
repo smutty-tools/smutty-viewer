@@ -14,9 +14,8 @@ import java.security.InvalidParameterException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-import static android.database.DatabaseUtils.dumpCursorToString;
 
-public class Downloader extends BroadcastReceiver {
+public class Downloader {
 
     interface ActionType {
         int NONE = 0;
@@ -96,10 +95,7 @@ public class Downloader extends BroadcastReceiver {
         Log.d(TAG, "Downloading URI " + uri.toString() + " as " + targetName + " with id " + Long.toString(resultId));
     }
 
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        // get provided download id
-        long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+    public void finalize(long downloadId) {
         if (downloadId == -1) {
             Log.d(TAG, "Download ID not provided");
             return;

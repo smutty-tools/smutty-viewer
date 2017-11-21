@@ -2,6 +2,7 @@ package io.github.smutty_tools.smutty_viewer;
 
 
 import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -11,7 +12,6 @@ import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -32,6 +32,14 @@ public class MainActivity extends AppCompatActivity {
     private Downloader downloader = null;
     private SharedPreferences settings = null;
 
+    BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+            downloader.finalize(downloadId);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,13 +54,13 @@ public class MainActivity extends AppCompatActivity {
         // accesses settings
         settings = PreferenceManager.getDefaultSharedPreferences(this);
         // callback for finished downloads
-        registerReceiver(downloader, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
     }
 
     @Override
     protected void onDestroy() {
         // callback for finished downloads
-        unregisterReceiver(downloader);
+        unregisterReceiver(onDownloadComplete);
         super.onDestroy();
     }
 
