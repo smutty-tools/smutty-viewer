@@ -34,10 +34,6 @@ public class MainActivity extends AppCompatActivity {
     BroadcastReceiver onDownloadComplete = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (downloader == null) {
-                toaster.display("Downloader is unavailable");
-                return;
-            }
             long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
             downloader.finalize(downloadId);
         }
@@ -50,12 +46,7 @@ public class MainActivity extends AppCompatActivity {
         // our toaster for messages
         toaster = new Toaster(this);
         // our download manager wrapper
-        try {
-            downloader = new Downloader(this, toaster);
-        } catch (NoSuchAlgorithmException e) {
-            toaster.display(e.getMessage());
-            downloader = null;
-        }
+        downloader = new Downloader(this, toaster);
         // accesses settings
         settings = PreferenceManager.getDefaultSharedPreferences(this);
         // callback for finished downloads
@@ -132,10 +123,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void downloadAction(String url) {
-        if (downloader == null) {
-            toaster.display("Downloader is unavailable");
-            return;
-        }
         // actually start download
         downloader.queue(url, "test_subdirectory");
     }
