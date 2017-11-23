@@ -14,10 +14,6 @@ import java.net.URISyntaxException;
 
 public class Downloader {
 
-    interface ActionType {
-        int NONE = 0;
-    }
-
     public static final String TAG = "Downloader";
 
     public static final String DOWNLOADING_SUB_DIRECTORY = "downloading";
@@ -34,7 +30,7 @@ public class Downloader {
         this.toaster = toaster;
     }
 
-    public void queue(String urlString, String subDirectory) {
+    public void queue(String urlString, String subDirectory, int actionId) {
         // build download information
         urlString = urlString.trim();
         subDirectory = subDirectory.trim();
@@ -48,7 +44,7 @@ public class Downloader {
         }
         // prepare final situation
         String relativeSubPath = new File(uri.getHost(), uri.getPath()).getPath();
-        DownloadInfo info = new DownloadInfo(uri, subDirectory, relativeSubPath, ActionType.NONE);
+        DownloadInfo info = new DownloadInfo(uri, subDirectory, relativeSubPath, actionId);
         // setup temporary situation
         String targetName = relativeSubPath + ".downloading";
         DownloadManager.Request request = new DownloadManager.Request(uri)
@@ -103,11 +99,13 @@ public class Downloader {
                     File dst = new File(parentContext.getExternalFilesDir(info.getTargetSubDirectory()), info.getRelativeSubPath());
                     dst.getParentFile().mkdirs();
                     dst.delete();
+                    // store destination path for the caller
+                    info.setStoragePath(dst.toString());
                     // notify the user
                     if (src.renameTo(dst)) {
+                        info.setSuccess(true);
                         toaster.display("Download succeeded");
                         Log.d(TAG, "Target file " + dst.toString());
-
                     } else {
                         toaster.display("Renaming download failed");
                     }
@@ -133,7 +131,12 @@ public class Downloader {
         }
     }
 
-    public void finalize(long downloadId) {
+    /**
+     * transits from temporary download to final destination storage
+     * @param downloadId provided by Intent on ACTION_DOWNLOAD_COMPLETE
+     * @return info struct (null if not found, otherwise with updated success/storagePath)
+     */
+    public DownloadInfo finalize(long downloadId) {
         // find our own info
         DownloadInfo info = downloads.get(downloadId);
         // remove internal association
@@ -148,5 +151,7 @@ public class Downloader {
         downloadManager.remove(downloadId);
         // prune all other downloads
         cleanupDownloads();
+        // return updated information to caller
+        return info;
     }
 }

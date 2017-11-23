@@ -18,14 +18,16 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 
-import java.security.NoSuchAlgorithmException;
-
 /**
  * Main activity class
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
+
+    interface DownloadAction {
+        int NONE = 0;
+    }
 
     private Downloader downloader = null;
     private SharedPreferences settings = null;
@@ -124,6 +126,6 @@ public class MainActivity extends AppCompatActivity {
 
     public void downloadAction(String url) {
         // actually start download
-        downloader.queue(url, "test_subdirectory");
+        downloader.queue(url, "test_subdirectory", DownloadAction.NONE);
     }
 }
