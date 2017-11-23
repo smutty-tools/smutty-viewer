@@ -18,7 +18,38 @@ public class Downloader {
 
     public static final String DOWNLOADING_SUB_DIRECTORY = "downloading";
 
-    private LongSparseArray<DownloadInfo> downloads = new LongSparseArray<>();
+    public class Info {
+        private Uri uri;
+        private String targetSubDirectory;
+        private String relativeSubPath;
+        private int actionId;
+        private String storagePath;
+        private boolean success;
+
+        public Info(Uri uri, String targetSubDirectory, String relativeSubPath, int actionId) {
+            this.uri = uri;
+            this.targetSubDirectory = targetSubDirectory;
+            this.relativeSubPath = relativeSubPath;
+            this.actionId = actionId;
+            // defaults
+            this.storagePath = null;
+            this.success = false;
+        }
+
+        public String getStoragePath() {
+            return storagePath;
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public int getActionId() {
+            return actionId;
+        }
+    }
+
+    private LongSparseArray<Info> downloads = new LongSparseArray<>();
 
     private Context parentContext;
     private DownloadManager downloadManager;
@@ -44,7 +75,7 @@ public class Downloader {
         }
         // prepare final situation
         String relativeSubPath = new File(uri.getHost(), uri.getPath()).getPath();
-        DownloadInfo info = new DownloadInfo(uri, subDirectory, relativeSubPath, actionId);
+        Info info = new Info(uri, subDirectory, relativeSubPath, actionId);
         // setup temporary situation
         String targetName = relativeSubPath + ".downloading";
         DownloadManager.Request request = new DownloadManager.Request(uri)
@@ -59,10 +90,10 @@ public class Downloader {
         } else {
             toaster.display("Download already running");
         }
-        Log.d(TAG, "Downloading URI " + uri.toString() + " as " + targetName + " with id " + Long.toString(resultId));
+        Log.d(TAG, "Download " + Long.toString(resultId) + " from Uri " + uri.toString() + " as " + targetName);
     }
 
-    private void moveToTarget(long downloadId, DownloadInfo info) {
+    private void moveToTarget(long downloadId, Info info) {
         if (info == null) {
             return;
         }
@@ -96,16 +127,16 @@ public class Downloader {
                         break;
                     }
                     File src = new File(uri);
-                    File dst = new File(parentContext.getExternalFilesDir(info.getTargetSubDirectory()), info.getRelativeSubPath());
+                    File dst = new File(parentContext.getExternalFilesDir(info.targetSubDirectory), info.relativeSubPath);
                     dst.getParentFile().mkdirs();
                     dst.delete();
                     // store destination path for the caller
-                    info.setStoragePath(dst.toString());
+                    info.storagePath = dst.toString();
                     // notify the user
                     if (src.renameTo(dst)) {
-                        info.setSuccess(true);
+                        info.success = true;
                         toaster.display("Download succeeded");
-                        Log.d(TAG, "Target file " + dst.toString());
+                        Log.d(TAG, "Target of " + Long.toString(downloadId) + " is " + dst.toString());
                     } else {
                         toaster.display("Renaming download failed");
                     }
@@ -134,11 +165,13 @@ public class Downloader {
     /**
      * transits from temporary download to final destination storage
      * @param downloadId provided by Intent on ACTION_DOWNLOAD_COMPLETE
-     * @return info struct (null if not found, otherwise with updated success/storagePath)
+     * @return null if info not found in downloads
+     *         otherwise updated info with updated success
+     *         if success is false, storagePath is null
      */
-    public DownloadInfo finalize(long downloadId) {
+    public Info finalize(long downloadId) {
         // find our own info
-        DownloadInfo info = downloads.get(downloadId);
+        Info info = downloads.get(downloadId);
         // remove internal association
         downloads.delete(downloadId);
         // ignore unknown downloads

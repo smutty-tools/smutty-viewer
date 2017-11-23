@@ -12,6 +12,7 @@ import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -37,7 +38,17 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-            downloader.finalize(downloadId);
+            Downloader.Info info = downloader.finalize(downloadId);
+            if (info == null) {
+                Log.w(TAG, "Download " + Long.toString(downloadId)+ " not found in hashMap");
+            } else {
+                if (info.isSuccess()) {
+                    Log.i(TAG, "Download succeeded: " + info.getStoragePath());
+                    Log.i(TAG, "Action id : " + info.getActionId());
+                } else {
+                    Log.i(TAG, "Download failed");
+                }
+            }
         }
     };
 
