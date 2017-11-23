@@ -16,8 +16,6 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.EditText;
 
 /**
  * Main activity class
@@ -27,8 +25,13 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
 
     interface DownloadAction {
-        int NONE = 0;
+        int INDEX = 1;
     }
+
+    private String[] downloadFolders = {
+            "misc",
+            "index"
+    };
 
     private Downloader downloader = null;
     private SharedPreferences settings = null;
@@ -125,18 +128,11 @@ public class MainActivity extends AppCompatActivity {
             toaster.display("Sync URL not provided");
             return;
         }
-        // actually start download
-        downloadAction(indexUrl);
+        // start index download
+        downloadIndex(indexUrl);
     }
 
-    public void downloadUrl(View view) {
-        EditText editTextUrl = findViewById(R.id.edittextUrl);
-        String url = editTextUrl.getText().toString();
-        downloadAction(url);
-    }
-
-    public void downloadAction(String url) {
-        // actually start download
-        downloader.queue(url, "test_subdirectory", DownloadAction.NONE);
+    public void downloadIndex(String indexUrl) {
+        downloader.queue(indexUrl, downloadFolders[DownloadAction.INDEX], DownloadAction.INDEX);
     }
 }

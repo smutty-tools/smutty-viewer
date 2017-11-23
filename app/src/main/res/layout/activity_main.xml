@@ -6,42 +6,4 @@
     android:layout_height="match_parent"
     tools:context="io.github.smutty_tools.smutty_viewer.MainActivity">
 
-    <EditText
-        android:id="@+id/edittextUrl"
-        android:layout_width="0dp"
-        android:layout_height="51dp"
-        android:layout_marginTop="16dp"
-        android:ems="10"
-        android:hint="Enter url to download "
-        android:inputType="textUri"
-        android:text="http://www.perdu.com"
-        app:layout_constraintEnd_toStartOf="@+id/buttonDownload"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/buttonDownload"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:onClick="downloadUrl"
-        android:text="Get"
-        app:layout_constraintBaseline_toBaselineOf="@+id/edittextUrl"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toEndOf="@+id/edittextUrl" />
-
-    <TextView
-        android:id="@+id/textViewResult"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginBottom="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginLeft="24dp"
-        android:layout_marginTop="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/edittextUrl" />
 </android.support.constraint.ConstraintLayout>
