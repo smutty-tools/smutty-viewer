@@ -17,6 +17,8 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 
+import java.io.File;
+
 /**
  * Main activity class
  */
@@ -44,14 +46,20 @@ public class MainActivity extends AppCompatActivity {
             Downloader.Info info = downloader.finalize(downloadId);
             if (info == null) {
                 Log.w(TAG, "Download " + Long.toString(downloadId)+ " not found in hashMap");
-            } else {
-                if (info.isSuccess()) {
-                    Log.i(TAG, "Download succeeded: " + info.getStoragePath());
-                    Log.i(TAG, "Action id : " + info.getActionId());
-                } else {
-                    Log.i(TAG, "Download failed");
-                }
+                return;
             }
+            if (!info.isSuccess()) {
+                Log.i(TAG, "Download failed");
+                return;
+            }
+            String downloadUri = info.getUri().toString();
+            File downloadedFile = downloader.getStoragePathFile(downloadUri, info.getTargetSubDirectory());
+            if (downloadedFile == null) {
+                toaster.display("Invalid download URI on callback : " + downloadUri);
+                return;
+            }
+            Log.i(TAG, "Download succeeded: " + downloadedFile.toString());
+            Log.i(TAG, "Action id : " + info.getActionId());
         }
     };
 

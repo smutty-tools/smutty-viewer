@@ -21,23 +21,15 @@ public class Downloader {
     public class Info {
         private Uri uri;
         private String targetSubDirectory;
-        private String relativeSubPath;
         private int actionId;
-        private String storagePath;
         private boolean success;
 
-        public Info(Uri uri, String targetSubDirectory, String relativeSubPath, int actionId) {
+        public Info(Uri uri, String targetSubDirectory, int actionId) {
             this.uri = uri;
             this.targetSubDirectory = targetSubDirectory;
-            this.relativeSubPath = relativeSubPath;
             this.actionId = actionId;
             // defaults
-            this.storagePath = null;
             this.success = false;
-        }
-
-        public String getStoragePath() {
-            return storagePath;
         }
 
         public boolean isSuccess() {
@@ -46,6 +38,14 @@ public class Downloader {
 
         public int getActionId() {
             return actionId;
+        }
+
+        public Uri getUri() {
+            return uri;
+        }
+
+        public String getTargetSubDirectory() {
+            return targetSubDirectory;
         }
     }
 
@@ -61,47 +61,74 @@ public class Downloader {
         this.toaster = toaster;
     }
 
+    public Uri getUri(String urlString) {
+        URI validUri = null;
+        try {
+            validUri  = new URI(urlString.trim());
+        } catch (URISyntaxException e) {
+            return null;
+        }
+        Uri uri = Uri.parse(validUri.toString());
+        return uri;
+    }
+
+    public File getStoragePathFile(String urlString, String subDirectory) {
+        Uri uri = getUri(urlString);
+        if (uri == null) {
+            return null;
+        }
+        String relativeSubPath = new File(uri.getHost(), uri.getPath()).getPath();
+        return new File(parentContext.getExternalFilesDir(subDirectory), relativeSubPath);
+    }
+
     public void queue(String urlString, String subDirectory, int actionId) {
         // build download information
-        urlString = urlString.trim();
         subDirectory = subDirectory.trim();
-        if (urlString.startsWith("//")) {
-            urlString = "https:" + urlString;
+        if (subDirectory.length() == 0) {
+            toaster.display("Subdirectory cannot be empty");
+            return;
         }
-        Uri uri = Uri.parse(urlString.trim());
+        Uri uri = getUri(urlString);
+        if (uri == null) {
+            toaster.display("Invalid remote URI " + urlString);
+            return;
+        }
         if (uri.getPath().length() == 0 || uri.getPath().endsWith("/")) {
-            toaster.display("Url local path must include file name");
+            toaster.display("Url local path must include file name, in " + urlString);
             return;
         }
         // prepare final situation
-        String relativeSubPath = new File(uri.getHost(), uri.getPath()).getPath();
-        Info info = new Info(uri, subDirectory, relativeSubPath, actionId);
-        // setup temporary situation
-        String targetName = relativeSubPath + ".downloading";
+        String downloadName = new File(uri.getHost(), uri.getPath()).toString();
+        // queue download
         DownloadManager.Request request = new DownloadManager.Request(uri)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
                 .setVisibleInDownloadsUi(false)
-                .setDestinationInExternalFilesDir(parentContext, DOWNLOADING_SUB_DIRECTORY, targetName);
-        // queue download
+                .setDestinationInExternalFilesDir(parentContext, DOWNLOADING_SUB_DIRECTORY, downloadName);
         long resultId = downloadManager.enqueue(request);
+        // setup for callback
+        Log.d(TAG, "Download " + Long.toString(resultId) + " from Uri " + uri.toString() + " as " + downloadName.toString() + " in " + subDirectory);
         if (downloads.get(resultId) == null) {
-            downloads.put(resultId, info);
+            downloads.put(resultId, new Info(uri, subDirectory, actionId));
             toaster.display("Download started");
+            Log.d(TAG, "download queued as " + Long.toString(resultId));
         } else {
             toaster.display("Download already running");
+            Log.d(TAG, "download already running as " + Long.toString(resultId));
         }
-        Log.d(TAG, "Download " + Long.toString(resultId) + " from Uri " + uri.toString() + " as " + targetName);
     }
 
     private void moveToTarget(long downloadId, Info info) {
         if (info == null) {
+            Log.d(TAG, "provided info is null");
             return;
         }
         // look up download DownloadManager for more info
         DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
         Cursor cursor = downloadManager.query(query);
         if (!cursor.moveToFirst()) {
-            toaster.display("No download found for this ID in DownloadManager");
+            String message = "No download found for this ID in DownloadManager";
+            toaster.display(message);
+            Log.d(TAG, message);
         } else {
             int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
             switch(status) {
@@ -118,20 +145,34 @@ public class Downloader {
                     toaster.display("Download running");
                     break;
                 case DownloadManager.STATUS_SUCCESSFUL:
-                    String local_uri = cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
-                    URI uri = null;
-                    try {
-                        uri = new URI(local_uri);
-                    } catch (URISyntaxException e) {
-                        toaster.display(e.getMessage());
+                    // get uri of temporary downloaded path from DownloadManager
+                    String localSourceString = cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+                    Log.d(TAG, "Source URI String: " + localSourceString);
+                    Uri localSourceUri = getUri(localSourceString);
+                    if (localSourceUri == null) {
+                        Log.e(TAG, "Invalid local source " + localSourceString + " from DownloadManager");
                         break;
                     }
-                    File src = new File(uri);
-                    File dst = new File(parentContext.getExternalFilesDir(info.targetSubDirectory), info.relativeSubPath);
-                    dst.getParentFile().mkdirs();
-                    dst.delete();
-                    // store destination path for the caller
-                    info.storagePath = dst.toString();
+                    Log.d(TAG, "Source URI Uri: " + localSourceUri.toString());
+                    File src = new File(localSourceUri.getPath());
+                    Log.d(TAG, "Source path: " + src.toString());
+                    // build uri of final downloaded path
+                    String storageUri = info.getUri().toString();
+                    File dst = getStoragePathFile(storageUri, info.getTargetSubDirectory());
+                    if (dst == null) {
+                        Log.e(TAG, "Invalid URI " + storageUri);
+                        break;
+                    }
+                    Log.d(TAG, "Destination file: " + dst.toString());
+                    // ensure that target directory exists
+                    File parent = dst.getParentFile();
+                    Log.d(TAG, "Destination path: " + parent.toString());
+                    boolean result;
+                    result = parent.mkdirs();
+                    Log.d(TAG, "Creating parents returned " + result);
+                    // remove possibly existing target download
+                    result = dst.delete();
+                    Log.d(TAG, "Deleting target returned " + result);
                     // notify the user
                     if (src.renameTo(dst)) {
                         info.success = true;
