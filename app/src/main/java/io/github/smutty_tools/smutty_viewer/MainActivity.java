@@ -16,6 +16,7 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.widget.TextView;
 
 import java.io.File;
 
@@ -35,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
             "index"
     };
 
+    private UiLogger logger = null;
     private Downloader downloader = null;
     private SharedPreferences settings = null;
     private Toaster toaster = null;
@@ -67,6 +69,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        // our UI logger
+        logger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
+        for (int i=0; i < 100; i++) {
+            logger.log(i%5, "disappearing line " + Integer.toString(i) + "\n");
+        }
+        logger.clear();
+        for (int i=0; i < 200; i++) {
+            logger.log(i%5, "Logging line " + Integer.toString(i) + "\n");
+        }
         // our toaster for messages
         toaster = new Toaster(this);
         // our download manager wrapper
