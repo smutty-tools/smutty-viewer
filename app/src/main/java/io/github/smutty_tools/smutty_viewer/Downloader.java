@@ -54,11 +54,13 @@ public class Downloader {
     private Context parentContext;
     private DownloadManager downloadManager;
     private Toaster toaster;
+    private UiLogger uiLogger;
 
-    public Downloader(Context parent, Toaster toaster) {
+    public Downloader(Context parent, Toaster toaster, UiLogger uiLogger) {
         this.parentContext = parent;
         this.downloadManager = (DownloadManager) parentContext.getSystemService(Context.DOWNLOAD_SERVICE);
         this.toaster = toaster;
+        this.uiLogger = uiLogger;
     }
 
     public Uri getUri(String urlString) {
@@ -85,16 +87,16 @@ public class Downloader {
         // build download information
         subDirectory = subDirectory.trim();
         if (subDirectory.length() == 0) {
-            toaster.display("Subdirectory cannot be empty");
+            uiLogger.error("Subdirectory cannot be empty");
             return;
         }
         Uri uri = getUri(urlString);
         if (uri == null) {
-            toaster.display("Invalid remote URI " + urlString);
+            uiLogger.error("Invalid remote URI " + urlString);
             return;
         }
         if (uri.getPath().length() == 0 || uri.getPath().endsWith("/")) {
-            toaster.display("Url local path must include file name, in " + urlString);
+            uiLogger.error("Url local path must include file name, in " + urlString);
             return;
         }
         // prepare final situation
@@ -106,43 +108,41 @@ public class Downloader {
                 .setDestinationInExternalFilesDir(parentContext, DOWNLOADING_SUB_DIRECTORY, downloadName);
         long resultId = downloadManager.enqueue(request);
         // setup for callback
-        Log.d(TAG, "Download " + Long.toString(resultId) + " from Uri " + uri.toString() + " as " + downloadName.toString() + " in " + subDirectory);
         if (downloads.get(resultId) == null) {
             downloads.put(resultId, new Info(uri, subDirectory, actionId));
-            toaster.display("Download started");
-            Log.d(TAG, "download queued as " + Long.toString(resultId));
+            uiLogger.info("Downloading id " + Long.toString(resultId) + " gets " + uri.toString());
         } else {
-            toaster.display("Download already running");
-            Log.d(TAG, "download already running as " + Long.toString(resultId));
+            uiLogger.warning("Download already running as id " + Long.toString(resultId));
         }
     }
 
     private void moveToTarget(long downloadId, Info info) {
+        String message;
         if (info == null) {
-            Log.d(TAG, "provided info is null");
+            uiLogger.error("Provided download info is 'null'");
             return;
         }
         // look up download DownloadManager for more info
         DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
         Cursor cursor = downloadManager.query(query);
         if (!cursor.moveToFirst()) {
-            String message = "No download found for this ID in DownloadManager";
-            toaster.display(message);
-            Log.d(TAG, message);
+            uiLogger.error("No download found for id " + Long.toString(downloadId)+ " in DownloadManager");
         } else {
             int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
             switch(status) {
                 case DownloadManager.STATUS_FAILED:
-                    toaster.display("Download failed");
+                    message = "Download failed";
+                    uiLogger.error(message);
+                    toaster.display(message);
                     break;
                 case DownloadManager.STATUS_PAUSED:
-                    toaster.display("Download paused");
+                    uiLogger.warning("Download paused");
                     break;
                 case DownloadManager.STATUS_PENDING:
-                    toaster.display("Download pending");
+                    uiLogger.info("Download pending");
                     break;
                 case DownloadManager.STATUS_RUNNING:
-                    toaster.display("Download running");
+                    uiLogger.info("Download running");
                     break;
                 case DownloadManager.STATUS_SUCCESSFUL:
                     // get uri of temporary downloaded path from DownloadManager
@@ -150,7 +150,7 @@ public class Downloader {
                     Log.d(TAG, "Source URI String: " + localSourceString);
                     Uri localSourceUri = getUri(localSourceString);
                     if (localSourceUri == null) {
-                        Log.e(TAG, "Invalid local source " + localSourceString + " from DownloadManager");
+                        uiLogger.error("Invalid local source " + localSourceString + " from DownloadManager");
                         break;
                     }
                     Log.d(TAG, "Source URI Uri: " + localSourceUri.toString());
@@ -160,7 +160,7 @@ public class Downloader {
                     String storageUri = info.getUri().toString();
                     File dst = getStoragePathFile(storageUri, info.getTargetSubDirectory());
                     if (dst == null) {
-                        Log.e(TAG, "Invalid URI " + storageUri);
+                        uiLogger.error("Invalid storage URI " + storageUri);
                         break;
                     }
                     Log.d(TAG, "Destination file: " + dst.toString());
@@ -176,10 +176,9 @@ public class Downloader {
                     // notify the user
                     if (src.renameTo(dst)) {
                         info.success = true;
-                        toaster.display("Download succeeded");
-                        Log.d(TAG, "Target of " + Long.toString(downloadId) + " is " + dst.toString());
+                        uiLogger.info("Download id " + Long.toString(downloadId) + " stored at " + dst.toString());
                     } else {
-                        toaster.display("Renaming download failed");
+                        uiLogger.info("Moving download id " + Long.toString(downloadId) + " failed");
                     }
                     break;
             }
@@ -199,7 +198,7 @@ public class Downloader {
         }
         cursor.close();
         if (n != 0) {
-            toaster.display(n + " downloads cleaned up");
+            uiLogger.info(n + " downloads cleaned up");
         }
     }
 
@@ -217,7 +216,7 @@ public class Downloader {
         downloads.delete(downloadId);
         // ignore unknown downloads
         if (info == null) {
-            toaster.display("Unknown download, ignore and remove");
+            uiLogger.warning("Unknown download id " + Long.toString(downloadId) + ", ignore and remove");
         } else {
             moveToTarget(downloadId, info);
         }

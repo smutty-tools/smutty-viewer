@@ -36,7 +36,7 @@ public class MainActivity extends AppCompatActivity {
             "index"
     };
 
-    private UiLogger logger = null;
+    private UiLogger uiLogger = null;
     private Downloader downloader = null;
     private SharedPreferences settings = null;
     private Toaster toaster = null;
@@ -69,23 +69,17 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        // our UI logger
-        logger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
-        for (int i=0; i < 100; i++) {
-            logger.log(i%5, "disappearing line " + Integer.toString(i) + "\n");
-        }
-        logger.clear();
-        for (int i=0; i < 200; i++) {
-            logger.log(i%5, "Logging line " + Integer.toString(i) + "\n");
-        }
+        // our UI uiLogger
+        uiLogger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
         // our toaster for messages
         toaster = new Toaster(this);
         // our download manager wrapper
-        downloader = new Downloader(this, toaster);
+        downloader = new Downloader(this, toaster, uiLogger);
         // accesses settings
         settings = PreferenceManager.getDefaultSharedPreferences(this);
         // callback for finished downloads
         registerReceiver(onDownloadComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+
     }
 
     @Override
@@ -147,11 +141,14 @@ public class MainActivity extends AppCompatActivity {
             toaster.display("Sync URL not provided");
             return;
         }
+        // starting refresh
+        uiLogger.info("Start refresh action");
         // start index download
         downloadIndex(indexUrl);
     }
 
     public void downloadIndex(String indexUrl) {
+        uiLogger.info("Downloading index");
         downloader.queue(indexUrl, downloadFolders[DownloadAction.INDEX], DownloadAction.INDEX);
     }
 }
