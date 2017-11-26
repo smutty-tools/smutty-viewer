@@ -18,7 +18,12 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.TextView;
 
+import org.tukaani.xz.XZInputStream;
+
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 
 /**
  * Main activity class
@@ -62,6 +67,48 @@ public class MainActivity extends AppCompatActivity {
             }
             Log.i(TAG, "Download succeeded: " + downloadedFile.toString());
             Log.i(TAG, "Action id : " + info.getActionId());
+            if (info.getActionId() == DownloadAction.INDEX) {
+                byte[] xzBuffer = null;
+                // decompress index file
+                try {
+                    FileInputStream fileIn = new FileInputStream(downloadedFile);
+                    XZInputStream xzIn = new XZInputStream(fileIn);
+                    // trigger reading the first block
+                    int result = xzIn.read();
+                    if (result == -1) {
+                        throw new IOException("Error while reading first byte of compressed data");
+                    }
+                    Log.d(TAG, "First byte read is " + Integer.toString(result));
+                    // setup buffer and handle already read byte
+                    int uncompressedSize = xzIn.available() + 1;
+                    Log.d(TAG, "UncompressedSize data length " + Integer.toString(uncompressedSize));
+                    xzBuffer = new byte[uncompressedSize ];
+                    xzBuffer[0] = (byte) result;
+                    // read the rest of the file
+                    result = xzIn.read(xzBuffer, 1, uncompressedSize - 1);
+                    uiLogger.info("Extracted " + Integer.toString(uncompressedSize) + " bytes of data from compressed input");
+                    if (result != uncompressedSize - 1) {
+                        throw new IOException("Could not extract all of compressed data");
+                    }
+                    // ensure that final
+                    result = xzIn.read();
+                    if (result != -1) {
+                        throw new IOException("Remaining data found after end of decompression");
+                    }
+                    // clean up
+                    xzIn.close();
+                    fileIn.close();
+                } catch (IOException e) {
+                    uiLogger.error(e.getMessage());
+                    return;
+                }
+                if (xzBuffer == null) {
+                    uiLogger.error("Nothing extracted from file");
+                    return;
+                }
+                String content = new String(xzBuffer);
+//                Log.d(TAG, content);
+            }
         }
     };
 
