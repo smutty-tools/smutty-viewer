@@ -1,7 +1,9 @@
-package io.github.smutty_tools.smutty_viewer;
+package io.github.smutty_tools.smutty_viewer.Downloads;
 
 import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.util.Log;
@@ -11,8 +13,11 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import io.github.smutty_tools.smutty_viewer.Tools.Toaster;
+import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
 
-public class Downloader {
+
+public class Downloader extends BroadcastReceiver {
 
     public static final String TAG = "Downloader";
 
@@ -55,12 +60,14 @@ public class Downloader {
     private DownloadManager downloadManager;
     private Toaster toaster;
     private UiLogger uiLogger;
+    private FinishedDownloadReceiver receiver;
 
-    public Downloader(Context parent, Toaster toaster, UiLogger uiLogger) {
+    public Downloader(Context parent, Toaster toaster, UiLogger uiLogger, FinishedDownloadReceiver receiver) {
         this.parentContext = parent;
         this.downloadManager = (DownloadManager) parentContext.getSystemService(Context.DOWNLOAD_SERVICE);
         this.toaster = toaster;
         this.uiLogger = uiLogger;
+        this.receiver = receiver;
     }
 
     public Uri getUri(String urlString) {
@@ -209,7 +216,7 @@ public class Downloader {
      *         otherwise updated info with updated success
      *         if success is false, storagePath is null
      */
-    public Info finalize(long downloadId) {
+    private Info finalize(long downloadId) {
         // find our own info
         Info info = downloads.get(downloadId);
         // remove internal association
@@ -226,5 +233,30 @@ public class Downloader {
         cleanupDownloads();
         // return updated information to caller
         return info;
+    }
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+        // get our stored data for this download
+        Downloader.Info info = finalize(downloadId);
+        if (info == null) {
+            Log.w(TAG, "Download " + Long.toString(downloadId)+ " not found in hashMap");
+            return;
+        }
+        if (!info.isSuccess()) {
+            Log.i(TAG, "Download failed");
+            return;
+        }
+        // build data for callback
+        String downloadUri = info.getUri().toString();
+        String subDirectory = info.getTargetSubDirectory();
+        File downloadedFile = getStoragePathFile(downloadUri, subDirectory);
+        if (downloadedFile == null) {
+            toaster.display("Invalid download URI on callback : " + downloadUri);
+            return;
+        }
+        // notify callback
+        receiver.downloadFinished(downloadUri, subDirectory, downloadedFile, info.getActionId());
     }
 }

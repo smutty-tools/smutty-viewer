@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="io.github.smutty_tools.smutty_viewer.MainActivity">
+    tools:context="io.github.smutty_tools.smutty_viewer.Activities.MainActivity">
 
     <LinearLayout
         android:layout_width="fill_parent"

@@ -1,4 +1,4 @@
-package io.github.smutty_tools.smutty_viewer;
+package io.github.smutty_tools.smutty_viewer.Activities;
 
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -21,6 +21,8 @@ import android.view.MenuItem;
 import android.support.v4.app.NavUtils;
 
 import java.util.List;
+
+import io.github.smutty_tools.smutty_viewer.R;
 
 /**
  * A {@link PreferenceActivity} that presents a set of application settings. On

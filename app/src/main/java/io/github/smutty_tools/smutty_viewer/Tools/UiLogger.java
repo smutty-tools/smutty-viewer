@@ -1,4 +1,4 @@
-package io.github.smutty_tools.smutty_viewer;
+package io.github.smutty_tools.smutty_viewer.Tools;
 
 import android.widget.TextView;
 
