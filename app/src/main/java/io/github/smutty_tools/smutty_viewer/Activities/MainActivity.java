@@ -160,12 +160,19 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
     }
 
     @Override
-    public void decompressionFinished(File storedFile, byte[] content, int nextAction) {
+    public void decompressionFinished(File storedFile, byte[] content, int actionId) {
         this.info("Decompression of", storedFile, "finished successfully and content is",
-                content.length, "bytes long, and next requested action is", nextAction);
+                content.length, "bytes long, and next requested action is", actionId);
+        // update state machine action
+        switch(actionId) {
+            case StateMachineSteps.DECOMPRESS_INDEX:
+                // TODO: analyze index data
+                this.debug("Analyze index data");
+                break;
+        }
     }
 
-    interface Level {
+    interface LogLevel {
         int CRITICAL = 0;
         int ERROR = 1;
         int WARNING = 2;
@@ -176,25 +183,25 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
     private void log(int level, Object... objects) {
         String message = TextUtils.join(" ", objects);
         switch (level) {
-            case Level.CRITICAL:
+            case LogLevel.CRITICAL:
                 Log.e(TAG, message);
                 uiLogger.critical(message);
                 toaster.display(message);
                 break;
-            case Level.ERROR:
+            case LogLevel.ERROR:
                 Log.e(TAG, message);
                 uiLogger.error(message);
                 toaster.display(message);
                 break;
-            case Level.WARNING:
+            case LogLevel.WARNING:
                 Log.w(TAG, message);
                 uiLogger.warning(message);
                 break;
-            case Level.INFO:
+            case LogLevel.INFO:
                 uiLogger.info(message);
                 Log.i(TAG, message);
                 break;
-            case Level.DEBUG:
+            case LogLevel.DEBUG:
                 Log.d(TAG, message);
                 break;
             default:
@@ -204,26 +211,26 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
 
     @Override
     public void debug(Object... objects) {
-        log(Level.DEBUG, objects);
+        log(LogLevel.DEBUG, objects);
     }
 
     @Override
     public void info(Object... objects) {
-        log(Level.INFO, objects);
+        log(LogLevel.INFO, objects);
     }
 
     @Override
     public void warning(Object... objects) {
-        log(Level.WARNING, objects);
+        log(LogLevel.WARNING, objects);
     }
 
     @Override
     public void error(Object... objects) {
-        log(Level.ERROR, objects);
+        log(LogLevel.ERROR, objects);
     }
 
     @Override
     public void critical(Object... objects) {
-        log(Level.CRITICAL, objects);
+        log(LogLevel.CRITICAL, objects);
     }
 }
