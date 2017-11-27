@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
@@ -25,6 +26,7 @@ import io.github.smutty_tools.smutty_viewer.Decompress.FinishedDecompressionRece
 import io.github.smutty_tools.smutty_viewer.Downloads.FinishedDownloadReceiver;
 import io.github.smutty_tools.smutty_viewer.Downloads.Downloader;
 import io.github.smutty_tools.smutty_viewer.R;
+import io.github.smutty_tools.smutty_viewer.Tools.ContentStorage;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 import io.github.smutty_tools.smutty_viewer.Tools.Toaster;
 import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
@@ -41,6 +43,7 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         int DECOMPRESS_INDEX = 2;
     }
 
+    private ContentStorage contentProvider = null;
     private UiLogger uiLogger = null;
     private Downloader downloader = null;
     private Decompressor decompressor = null;
@@ -51,14 +54,16 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        // initialize storage
+        contentProvider = new ContentStorage(Environment.getExternalStorageDirectory());
         // our UI uiLogger
         uiLogger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
         // our toaster for messages
         toaster = new Toaster(this);
         // our download manager wrapper
-        downloader = new Downloader(this, toaster, uiLogger, this);
+        downloader = new Downloader(contentProvider, (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE), this, this);
         // our decompressor
-        decompressor = new Decompressor(toaster, uiLogger, this);
+        decompressor = new Decompressor(this, this);
         // accesses settings
         settings = PreferenceManager.getDefaultSharedPreferences(this);
         // callback for finished downloads
@@ -125,25 +130,24 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
             return;
         }
         // starting refresh
-        uiLogger.info("Start refresh action");
+        this.info("Start refresh action");
         // start index download
         downloadIndex(indexUrl);
     }
 
     public void downloadIndex(String indexUrl) {
-        uiLogger.info("Downloading index");
+        this.info("Downloading index");
         downloader.queue(indexUrl, "index", StateMachineSteps.DOWNLOAD_INDEX);
     }
 
     @Override
     public void downloadFinished(String urlString, String subDirectory, File storedFile, int actionId) {
         // log progress
-        uiLogger.info("Download " + urlString +
-                " finished successfully and stored in " + storedFile.toString() +
-                " and next requested action is " + Integer.toString(actionId));
+        this.info("Download", urlString, "finished successfully and stored in",
+                storedFile.toString(), "and next requested action is", Integer.toString(actionId));
         File downloadedFile = downloader.getStoragePathFile(urlString, subDirectory);
         if (downloadedFile == null) {
-            toaster.display("Invalid download URI on callback : " + urlString);
+            this.error("Invalid download URI on callback : ", urlString);
             return;
         }
         // update state machine action
@@ -157,9 +161,8 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
 
     @Override
     public void decompressionFinished(File storedFile, byte[] content, int nextAction) {
-        uiLogger.info("Decompression of " + storedFile +
-                " finished successfully and content is " + content.length +
-                " bytes long, and next requested action is " + Integer.toString(nextAction));
+        this.info("Decompression of", storedFile, "finished successfully and content is",
+                content.length, "bytes long, and next requested action is", nextAction);
     }
 
     interface Level {

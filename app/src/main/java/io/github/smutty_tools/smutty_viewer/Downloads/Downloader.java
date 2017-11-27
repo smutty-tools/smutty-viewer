@@ -13,8 +13,8 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 
-import io.github.smutty_tools.smutty_viewer.Tools.Toaster;
-import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
+import io.github.smutty_tools.smutty_viewer.Tools.ContentStorage;
+import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 
 
 public class Downloader extends BroadcastReceiver {
@@ -56,17 +56,15 @@ public class Downloader extends BroadcastReceiver {
 
     private LongSparseArray<Info> downloads = new LongSparseArray<>();
 
-    private Context parentContext;
+    private ContentStorage contentStorage;
     private DownloadManager downloadManager;
-    private Toaster toaster;
-    private UiLogger uiLogger;
+    private Logger logger;
     private FinishedDownloadReceiver receiver;
 
-    public Downloader(Context parent, Toaster toaster, UiLogger uiLogger, FinishedDownloadReceiver receiver) {
-        this.parentContext = parent;
-        this.downloadManager = (DownloadManager) parentContext.getSystemService(Context.DOWNLOAD_SERVICE);
-        this.toaster = toaster;
-        this.uiLogger = uiLogger;
+    public Downloader(ContentStorage contentStorage, DownloadManager downloadManager, Logger logger, FinishedDownloadReceiver receiver) {
+        this.contentStorage = contentStorage;
+        this.downloadManager = downloadManager;
+        this.logger = logger;
         this.receiver = receiver;
     }
 
@@ -87,69 +85,69 @@ public class Downloader extends BroadcastReceiver {
             return null;
         }
         String relativeSubPath = new File(uri.getHost(), uri.getPath()).getPath();
-        return new File(parentContext.getExternalFilesDir(subDirectory), relativeSubPath);
+        return contentStorage.getStorageFile(subDirectory, relativeSubPath);
     }
 
     public void queue(String urlString, String subDirectory, int actionId) {
         // build download information
         subDirectory = subDirectory.trim();
         if (subDirectory.length() == 0) {
-            uiLogger.error("Subdirectory cannot be empty");
+            logger.error("Subdirectory cannot be empty");
             return;
         }
         Uri uri = getUri(urlString);
         if (uri == null) {
-            uiLogger.error("Invalid remote URI " + urlString);
+            logger.error("Invalid remote URI", urlString);
             return;
         }
         if (uri.getPath().length() == 0 || uri.getPath().endsWith("/")) {
-            uiLogger.error("Url local path must include file name, in " + urlString);
+            logger.error("Url local path must include file name, in", urlString);
             return;
         }
-        // prepare final situation
+        // prepare temporary situation
         String downloadName = new File(uri.getHost(), uri.getPath()).toString();
+        File downloadFile = contentStorage.getStorageFile(DOWNLOADING_SUB_DIRECTORY, downloadName);
+        Log.d(TAG, downloadFile.toString());
+        Uri downloadStorageUri = Uri.fromFile(downloadFile);
         // queue download
         DownloadManager.Request request = new DownloadManager.Request(uri)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
                 .setVisibleInDownloadsUi(false)
-                .setDestinationInExternalFilesDir(parentContext, DOWNLOADING_SUB_DIRECTORY, downloadName);
+                .setDestinationUri(downloadStorageUri);
         long resultId = downloadManager.enqueue(request);
         // setup for callback
         if (downloads.get(resultId) == null) {
             downloads.put(resultId, new Info(uri, subDirectory, actionId));
-            uiLogger.info("Downloading id " + Long.toString(resultId) + " gets " + uri.toString());
+            logger.info("Downloading id", resultId, "which fetches", uri.toString());
         } else {
-            uiLogger.warning("Download already running as id " + Long.toString(resultId));
+            logger.warning("Download already running as id", resultId);
         }
     }
 
     private void moveToTarget(long downloadId, Info info) {
-        String message;
         if (info == null) {
-            uiLogger.error("Provided download info is 'null'");
+            logger.critical("Provided download info is 'null'");
             return;
         }
         // look up download DownloadManager for more info
         DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
         Cursor cursor = downloadManager.query(query);
         if (!cursor.moveToFirst()) {
-            uiLogger.error("No download found for id " + Long.toString(downloadId)+ " in DownloadManager");
+            logger.error("No download found for id", downloadId, "in DownloadManager");
         } else {
             int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
             switch(status) {
                 case DownloadManager.STATUS_FAILED:
-                    message = "Download failed";
-                    uiLogger.error(message);
-                    toaster.display(message);
+                    logger.error("Download failed");
                     break;
                 case DownloadManager.STATUS_PAUSED:
-                    uiLogger.warning("Download paused");
+                    logger.warning("Download paused");
                     break;
                 case DownloadManager.STATUS_PENDING:
-                    uiLogger.info("Download pending");
+                    logger.info("Download pending");
                     break;
                 case DownloadManager.STATUS_RUNNING:
-                    uiLogger.info("Download running");
+                    logger.info("Download running");
                     break;
                 case DownloadManager.STATUS_SUCCESSFUL:
                     // get uri of temporary downloaded path from DownloadManager
@@ -157,7 +155,7 @@ public class Downloader extends BroadcastReceiver {
                     Log.d(TAG, "Source URI String: " + localSourceString);
                     Uri localSourceUri = getUri(localSourceString);
                     if (localSourceUri == null) {
-                        uiLogger.error("Invalid local source " + localSourceString + " from DownloadManager");
+                        logger.error("Invalid local source", localSourceString, "from DownloadManager");
                         break;
                     }
                     Log.d(TAG, "Source URI Uri: " + localSourceUri.toString());
@@ -167,7 +165,7 @@ public class Downloader extends BroadcastReceiver {
                     String storageUri = info.getUri().toString();
                     File dst = getStoragePathFile(storageUri, info.getTargetSubDirectory());
                     if (dst == null) {
-                        uiLogger.error("Invalid storage URI " + storageUri);
+                        logger.error("Invalid storage URI", storageUri);
                         break;
                     }
                     Log.d(TAG, "Destination file: " + dst.toString());
@@ -183,9 +181,9 @@ public class Downloader extends BroadcastReceiver {
                     // notify the user
                     if (src.renameTo(dst)) {
                         info.success = true;
-                        uiLogger.info("Download id " + Long.toString(downloadId) + " stored at " + dst.toString());
+                        logger.info("Download id", downloadId, "stored at", dst.toString());
                     } else {
-                        uiLogger.info("Moving download id " + Long.toString(downloadId) + " failed");
+                        logger.info("Moving download id", downloadId, "failed");
                     }
                     break;
             }
@@ -205,7 +203,7 @@ public class Downloader extends BroadcastReceiver {
         }
         cursor.close();
         if (n != 0) {
-            uiLogger.info(n + " downloads cleaned up");
+            logger.info(n, "downloads cleaned up");
         }
     }
 
@@ -223,7 +221,7 @@ public class Downloader extends BroadcastReceiver {
         downloads.delete(downloadId);
         // ignore unknown downloads
         if (info == null) {
-            uiLogger.warning("Unknown download id " + Long.toString(downloadId) + ", ignore and remove");
+            logger.warning("Unknown download id", downloadId, ", ignore and remove");
         } else {
             moveToTarget(downloadId, info);
         }
@@ -241,11 +239,11 @@ public class Downloader extends BroadcastReceiver {
         // get our stored data for this download
         Downloader.Info info = finalize(downloadId);
         if (info == null) {
-            Log.w(TAG, "Download " + Long.toString(downloadId)+ " not found in hashMap");
+            logger.warning("Download", downloadId, "not found in hashMap");
             return;
         }
         if (!info.isSuccess()) {
-            Log.i(TAG, "Download failed");
+            logger.info("Download failed");
             return;
         }
         // build data for callback
@@ -253,7 +251,7 @@ public class Downloader extends BroadcastReceiver {
         String subDirectory = info.getTargetSubDirectory();
         File downloadedFile = getStoragePathFile(downloadUri, subDirectory);
         if (downloadedFile == null) {
-            toaster.display("Invalid download URI on callback : " + downloadUri);
+            logger.error("Invalid download URI on callback :", downloadUri);
             return;
         }
         // notify callback

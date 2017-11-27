@@ -8,20 +8,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 
-import io.github.smutty_tools.smutty_viewer.Tools.Toaster;
-import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
+import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 
 public class Decompressor {
 
     public static final String TAG = "Decompressor";
 
-    private Toaster toaster;
-    private UiLogger uiLogger;
+    private Logger logger;
     private FinishedDecompressionReceiver receiver;
 
-    public Decompressor(Toaster toaster, UiLogger uiLogger, FinishedDecompressionReceiver receiver) {
-        this.toaster = toaster;
-        this.uiLogger = uiLogger;
+    public Decompressor(Logger logger, FinishedDecompressionReceiver receiver) {
+        this.logger = logger;
         this.receiver = receiver;
     }
 
@@ -43,12 +40,12 @@ public class Decompressor {
             Log.d(TAG, "First byte read is " + Integer.toString(result));
             // setup buffer and handle already read byte
             int uncompressedSize = xzIn.available() + 1;
-            Log.d(TAG, "UncompressedSize data length " + Integer.toString(uncompressedSize));
+            logger.debug("UncompressedSize data length", uncompressedSize);
             xzBuffer = new byte[uncompressedSize ];
             xzBuffer[0] = (byte) result;
             // read the rest of the file
             result = xzIn.read(xzBuffer, 1, uncompressedSize - 1);
-            uiLogger.info("Extracted " + Integer.toString(uncompressedSize) + " bytes of data from compressed input");
+            logger.debug("Extracted", uncompressedSize, "bytes of data from compressed input");
             if (result != uncompressedSize - 1) {
                 throw new IOException("Could not extract all of compressed data");
             }
@@ -61,12 +58,11 @@ public class Decompressor {
             xzIn.close();
             fileIn.close();
         } catch (IOException e) {
-            uiLogger.error(e.getMessage());
-            toaster.display("Error while decompressing file");
+            logger.error("Error while decompressing file", e.getMessage());
             return;
         }
         if (xzBuffer == null) {
-            uiLogger.error("Nothing extracted from file");
+            logger.error("Nothing extracted from file");
             return;
         }
 
