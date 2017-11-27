@@ -11,6 +11,8 @@ import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -23,13 +25,14 @@ import io.github.smutty_tools.smutty_viewer.Decompress.FinishedDecompressionRece
 import io.github.smutty_tools.smutty_viewer.Downloads.FinishedDownloadReceiver;
 import io.github.smutty_tools.smutty_viewer.Downloads.Downloader;
 import io.github.smutty_tools.smutty_viewer.R;
+import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 import io.github.smutty_tools.smutty_viewer.Tools.Toaster;
 import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
 
 /**
  * Main activity class
  */
-public class MainActivity extends AppCompatActivity implements FinishedDownloadReceiver, FinishedDecompressionReceiver {
+public class MainActivity extends AppCompatActivity implements FinishedDownloadReceiver, FinishedDecompressionReceiver, Logger {
 
     private static final String TAG = "MainActivity";
 
@@ -157,5 +160,67 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         uiLogger.info("Decompression of " + storedFile +
                 " finished successfully and content is " + content.length +
                 " bytes long, and next requested action is " + Integer.toString(nextAction));
+    }
+
+    interface Level {
+        int CRITICAL = 0;
+        int ERROR = 1;
+        int WARNING = 2;
+        int INFO = 3;
+        int DEBUG = 4;
+    }
+
+    private void log(int level, Object... objects) {
+        String message = TextUtils.join(" ", objects);
+        switch (level) {
+            case Level.CRITICAL:
+                Log.e(TAG, message);
+                uiLogger.critical(message);
+                toaster.display(message);
+                break;
+            case Level.ERROR:
+                Log.e(TAG, message);
+                uiLogger.error(message);
+                toaster.display(message);
+                break;
+            case Level.WARNING:
+                Log.w(TAG, message);
+                uiLogger.warning(message);
+                break;
+            case Level.INFO:
+                uiLogger.info(message);
+                Log.i(TAG, message);
+                break;
+            case Level.DEBUG:
+                Log.d(TAG, message);
+                break;
+            default:
+                throw new IllegalArgumentException("Logging level " + Integer.toString(level) + " is invalid");
+        }
+    }
+
+    @Override
+    public void debug(Object... objects) {
+        log(Level.DEBUG, objects);
+    }
+
+    @Override
+    public void info(Object... objects) {
+        log(Level.INFO, objects);
+    }
+
+    @Override
+    public void warning(Object... objects) {
+        log(Level.WARNING, objects);
+    }
+
+    @Override
+    public void error(Object... objects) {
+        log(Level.ERROR, objects);
+    }
+
+    @Override
+    public void critical(Object... objects) {
+        log(Level.CRITICAL, objects);
     }
 }
