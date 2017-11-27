@@ -19,9 +19,9 @@ import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 
 public class Downloader extends BroadcastReceiver {
 
-    public static final String TAG = "Downloader";
+    private static final String TAG = "Downloader";
 
-    public static final String DOWNLOADING_SUB_DIRECTORY = "downloading";
+    private static final String DOWNLOADING_SUB_DIRECTORY = "downloading";
 
     public class Info {
         private Uri uri;

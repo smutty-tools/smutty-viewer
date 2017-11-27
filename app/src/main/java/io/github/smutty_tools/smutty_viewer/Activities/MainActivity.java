@@ -18,6 +18,7 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 
@@ -28,7 +29,6 @@ import io.github.smutty_tools.smutty_viewer.Downloads.Downloader;
 import io.github.smutty_tools.smutty_viewer.R;
 import io.github.smutty_tools.smutty_viewer.Tools.ContentStorage;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger;
-import io.github.smutty_tools.smutty_viewer.Tools.Toaster;
 import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
 
 /**
@@ -48,7 +48,6 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
     private Downloader downloader = null;
     private Decompressor decompressor = null;
     private SharedPreferences settings = null;
-    private Toaster toaster = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,8 +57,6 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         contentProvider = new ContentStorage(Environment.getExternalStorageDirectory());
         // our UI uiLogger
         uiLogger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
-        // our toaster for messages
-        toaster = new Toaster(this);
         // our download manager wrapper
         downloader = new Downloader(contentProvider, (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE), this, this);
         // our decompressor
@@ -114,19 +111,19 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         NetworkInfo ni = getActiveNetworkInfo();
         // check connectivity
         if (ni == null || !ni.isConnected()) {
-            toaster.display(getString(R.string.toast_network_unavailable));
+            displayToast(getString(R.string.toast_network_unavailable));
             return;
         }
         // check wifi restrictions
         boolean sync_only_on_wifi = settings.getBoolean("sync_only_on_wifi", false);
         if (sync_only_on_wifi && ni.getType() != ConnectivityManager.TYPE_WIFI) {
-            toaster.display("Synchronization allowed only on wifi");
+            displayToast("Synchronization allowed only on wifi");
             return;
         }
         // download index file
         String indexUrl = settings.getString("sync_url", null);
         if (indexUrl == null || indexUrl.length() == 0) {
-            toaster.display("Sync URL not provided");
+            displayToast("Sync URL not provided");
             return;
         }
         // starting refresh
@@ -172,6 +169,12 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         }
     }
 
+    public void displayToast(String message) {
+        int duration = Toast.LENGTH_SHORT;
+        Toast toast = Toast.makeText(this, message, duration);
+        toast.show();
+    }
+
     interface LogLevel {
         int CRITICAL = 0;
         int ERROR = 1;
@@ -186,12 +189,12 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
             case LogLevel.CRITICAL:
                 Log.e(TAG, message);
                 uiLogger.critical(message);
-                toaster.display(message);
+                displayToast(message);
                 break;
             case LogLevel.ERROR:
                 Log.e(TAG, message);
                 uiLogger.error(message);
-                toaster.display(message);
+                displayToast(message);
                 break;
             case LogLevel.WARNING:
                 Log.w(TAG, message);

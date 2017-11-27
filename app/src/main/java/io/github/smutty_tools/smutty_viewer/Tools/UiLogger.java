@@ -8,6 +8,8 @@ import java.util.Date;
 
 public class UiLogger {
 
+    private static final String TAG = "UiLogger";
+
     interface LogLevels {
         int CRITICAL = 0;
         int ERROR = 1;

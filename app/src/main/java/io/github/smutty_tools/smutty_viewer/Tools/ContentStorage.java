@@ -6,9 +6,9 @@ import java.io.File;
 
 public class ContentStorage {
 
-    public static final String TAG = "ContentStorage";
+    private static final String TAG = "ContentStorage";
 
-    public static final String BASE_SUB_DIRECTORY = "smutty-viewer";
+    private static final String BASE_SUB_DIRECTORY = "smutty-viewer";
 
     private File baseDirectory;
 
