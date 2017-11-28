@@ -20,8 +20,12 @@ import android.view.MenuItem;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+
 import java.io.File;
 
+import io.github.smutty_tools.smutty_viewer.Data.IndexData;
 import io.github.smutty_tools.smutty_viewer.Decompress.Decompressor;
 import io.github.smutty_tools.smutty_viewer.Decompress.FinishedDecompressionReceiver;
 import io.github.smutty_tools.smutty_viewer.Downloads.FinishedDownloadReceiver;
@@ -163,8 +167,8 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         // update state machine action
         switch(actionId) {
             case StateMachineSteps.DECOMPRESS_INDEX:
-                // TODO: analyze index data
-                this.debug("Analyze index data");
+                IndexData indexData = new IndexData(this);
+                indexData.persistFromJsonString(new String(content));
                 break;
         }
     }
