@@ -1,0 +1,69 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "673a79d4fa91e4edce172467c2ee4caa",
+    "entities": [
+      {
+        "tableName": "packages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`md5` TEXT NOT NULL, `referenced_in_index` INTEGER NOT NULL, `file_name` TEXT, `content_type` TEXT, `max_id` INTEGER NOT NULL, `min_id` INTEGER NOT NULL, `has_tags` INTEGER NOT NULL, PRIMARY KEY(`md5`))",
+        "fields": [
+          {
+            "fieldPath": "md5",
+            "columnName": "md5",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "referencedInIndex",
+            "columnName": "referenced_in_index",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "file_name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "contentType",
+            "columnName": "content_type",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "maxId",
+            "columnName": "max_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minId",
+            "columnName": "min_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasTags",
+            "columnName": "has_tags",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "columnNames": [
+            "md5"
+          ],
+          "autoGenerate": false
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, \"673a79d4fa91e4edce172467c2ee4caa\")"
+    ]
+  }
+}

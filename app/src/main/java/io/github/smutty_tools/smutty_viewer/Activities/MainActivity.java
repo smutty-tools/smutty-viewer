@@ -2,6 +2,7 @@ package io.github.smutty_tools.smutty_viewer.Activities;
 
 
 import android.app.DownloadManager;
+import android.arch.persistence.room.Room;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -22,10 +23,15 @@ import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 
+import io.github.smutty_tools.smutty_viewer.Data.AppDatabase;
+import io.github.smutty_tools.smutty_viewer.Data.AppDatabase_Impl;
 import io.github.smutty_tools.smutty_viewer.Data.IndexData;
+import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackage;
+import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackageDao;
 import io.github.smutty_tools.smutty_viewer.Decompress.Decompressor;
 import io.github.smutty_tools.smutty_viewer.Decompress.FinishedDecompressionReceiver;
 import io.github.smutty_tools.smutty_viewer.Downloads.FinishedDownloadReceiver;
@@ -52,13 +58,16 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
     private Downloader downloader = null;
     private Decompressor decompressor = null;
     private SharedPreferences settings = null;
+    private AppDatabase appDatabase = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        // initialize storage
+        // initialize file storage
         contentProvider = new ContentStorage(Environment.getExternalStorageDirectory());
+        // initialize db storage
+        appDatabase = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "smutty_viewer").allowMainThreadQueries().build();
         // our UI uiLogger
         uiLogger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
         // our download manager wrapper
@@ -167,8 +176,23 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         // update state machine action
         switch(actionId) {
             case StateMachineSteps.DECOMPRESS_INDEX:
-                IndexData indexData = new IndexData(this);
-                indexData.persistFromJsonString(new String(content));
+                JSONArray jsonArray = null;
+                try {
+                    jsonArray = new JSONArray(new String(content));
+                    int nItems = jsonArray.length();
+                    this.info(nItems, "data packages in index");
+                    for (int i=0; i<nItems; i++) {
+                        JSONObject jsonObject = jsonArray.getJSONObject(i);
+                        this.info("IndexItem", jsonObject);
+                        SmuttyPackage pkg = SmuttyPackage.fromJson(jsonObject);
+                        SmuttyPackageDao pkgDao = appDatabase.smuttyPackageDao();
+                        pkgDao.insert(pkg);
+                        this.info("pkg inserted", pkg);
+                    }
+                } catch (JSONException e) {
+                    this.error("Json error", e.getMessage());
+                    return;
+                }
                 break;
         }
     }
@@ -209,6 +233,7 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
                 Log.i(TAG, message);
                 break;
             case LogLevel.DEBUG:
+//                uiLogger.debug(message);
                 Log.d(TAG, message);
                 break;
             default:
