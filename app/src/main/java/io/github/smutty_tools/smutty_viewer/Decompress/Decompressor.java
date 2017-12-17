@@ -2,25 +2,43 @@ package io.github.smutty_tools.smutty_viewer.Decompress;
 
 import android.util.Log;
 
-import java.io.File;
+import org.tukaani.xz.XZInputStream;
 
-import io.github.smutty_tools.smutty_viewer.Tools.Logger;
+import java.io.IOException;
+import java.io.InputStream;
 
 public class Decompressor {
 
     private static final String TAG = "Decompressor";
 
-    private Logger logger;
-    private FinishedDecompressionReceiver receiver;
-
-    public Decompressor(Logger logger, FinishedDecompressionReceiver receiver) {
-        this.logger = logger;
-        this.receiver = receiver;
-    }
-
-    public void queue(File storedFile, int actionId) {
-        Log.d(TAG, "Action " + Integer.toString(actionId) + " decompressing " + storedFile.toString());
-        // queue decompression task
-        new DecompressorAsyncTask(logger, storedFile, actionId, receiver).run();
+    public static byte[] extractXz(InputStream inputStream) throws IOException {
+        byte[] xzBuffer = null;
+        // decompress index file
+        XZInputStream xzIn = new XZInputStream(inputStream);
+        // trigger reading the first block
+        int result = xzIn.read();
+        if (result == -1) {
+            throw new IOException("Error while reading first byte of compressed data");
+        }
+        Log.d(TAG, "First byte read is " + Integer.toString(result));
+        // setup buffer and handle already read byte
+        int uncompressedSize = xzIn.available() + 1;
+        Log.d(TAG, "UncompressedSize data length: " + uncompressedSize);
+        xzBuffer = new byte[uncompressedSize];
+        xzBuffer[0] = (byte) result;
+        // read the rest of the file
+        result = xzIn.read(xzBuffer, 1, uncompressedSize - 1);
+        if (result != uncompressedSize - 1) {
+            throw new IOException("Could not extract all of compressed data");
+        }
+        Log.d(TAG, "Extracted " + uncompressedSize + " bytes of data from compressed input");
+        // ensure that final
+        result = xzIn.read();
+        if (result != -1) {
+            throw new IOException("Remaining data found after end of decompression");
+        }
+        // clean up
+        xzIn.close();
+        return xzBuffer;
     }
 }

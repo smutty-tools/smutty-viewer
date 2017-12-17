@@ -1,16 +1,13 @@
 package io.github.smutty_tools.smutty_viewer.Activities;
 
 
-import android.app.DownloadManager;
 import android.arch.persistence.room.Room;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
-import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
@@ -21,69 +18,51 @@ import android.view.MenuItem;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import java.security.InvalidParameterException;
+import java.text.DateFormat;
+import java.util.Date;
 
-import java.io.File;
-
+import io.github.smutty_tools.smutty_viewer.AsyncTasks.RefreshIndexTask;
 import io.github.smutty_tools.smutty_viewer.Data.AppDatabase;
-import io.github.smutty_tools.smutty_viewer.Data.AppDatabase_Impl;
-import io.github.smutty_tools.smutty_viewer.Data.IndexData;
-import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackage;
-import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackageDao;
-import io.github.smutty_tools.smutty_viewer.Decompress.Decompressor;
-import io.github.smutty_tools.smutty_viewer.Decompress.FinishedDecompressionReceiver;
-import io.github.smutty_tools.smutty_viewer.Downloads.FinishedDownloadReceiver;
-import io.github.smutty_tools.smutty_viewer.Downloads.Downloader;
 import io.github.smutty_tools.smutty_viewer.R;
-import io.github.smutty_tools.smutty_viewer.Tools.ContentStorage;
+import io.github.smutty_tools.smutty_viewer.Tools.LogEntry;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger;
-import io.github.smutty_tools.smutty_viewer.Tools.UiLogger;
 
 /**
  * Main activity class
  */
-public class MainActivity extends AppCompatActivity implements FinishedDownloadReceiver, FinishedDecompressionReceiver, Logger {
+public class MainActivity extends AppCompatActivity implements Logger {
 
     private static final String TAG = "MainActivity";
 
-    interface StateMachineSteps {
-        int DOWNLOAD_INDEX = 1;
-        int DECOMPRESS_INDEX = 2;
-    }
+    private static final String[] LEVELS = {
+        "CRITICAL",
+        "ERROR",
+        "WARNING",
+        "INFO",
+        "DEBUG"
+    };
 
-    private ContentStorage contentProvider = null;
-    private UiLogger uiLogger = null;
-    private Downloader downloader = null;
-    private Decompressor decompressor = null;
     private SharedPreferences settings = null;
     private AppDatabase appDatabase = null;
+    private RefreshIndexTask refreshIndexTask = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        // initialize file storage
-        contentProvider = new ContentStorage(Environment.getExternalStorageDirectory());
-        // initialize db storage
-        appDatabase = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "smutty_viewer").allowMainThreadQueries().build();
-        // our UI uiLogger
-        uiLogger = new UiLogger((TextView) findViewById(R.id.textViewLogContent));
-        // our download manager wrapper
-        downloader = new Downloader(contentProvider, (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE), this, this);
-        // our decompressor
-        decompressor = new Decompressor(this, this);
-        // accesses settings
+        appDatabase = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "smutty_viewer").build();
         settings = PreferenceManager.getDefaultSharedPreferences(this);
-        // callback for finished downloads
-        registerReceiver(downloader, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
     }
 
     @Override
     protected void onDestroy() {
-        // callback for finished downloads
-        unregisterReceiver(downloader);
+        // cancel AsyncTasks
+        if (refreshIndexTask != null) {
+            info("Canceling refresh index task");
+            refreshIndexTask.cancel(true);
+            refreshIndexTask = null;
+        }
         super.onDestroy();
     }
 
@@ -139,62 +118,35 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
             displayToast("Sync URL not provided");
             return;
         }
-        // starting refresh
-        this.info("Start refresh action");
-        // start index download
-        downloadIndex(indexUrl);
-    }
-
-    public void downloadIndex(String indexUrl) {
-        this.info("Downloading index");
-        downloader.queue(indexUrl, "index", StateMachineSteps.DOWNLOAD_INDEX);
-    }
-
-    @Override
-    public void downloadFinished(String urlString, String subDirectory, File storedFile, int actionId) {
-        // log progress
-        this.info("Download", urlString, "finished successfully and stored in",
-                storedFile.toString(), "and next requested action is", Integer.toString(actionId));
-        File downloadedFile = downloader.getStoragePathFile(urlString, subDirectory);
-        if (downloadedFile == null) {
-            this.error("Invalid download URI on callback : ", urlString);
+        // skip if already running
+        if (refreshIndexTask != null) {
+            displayToast("Sync index already running");
             return;
         }
-        // update state machine action
-        switch(actionId) {
-            case StateMachineSteps.DOWNLOAD_INDEX:
-                // queue decompression task
-                decompressor.queue(downloadedFile, StateMachineSteps.DECOMPRESS_INDEX);
-                break;
-        }
-    }
+        // setup task
+        refreshIndexTask = new RefreshIndexTask(appDatabase) {
 
-    @Override
-    public void decompressionFinished(File storedFile, byte[] content, int actionId) {
-        this.info("Decompression of", storedFile, "finished successfully and content is",
-                content.length, "bytes long, and next requested action is", actionId);
-        // update state machine action
-        switch(actionId) {
-            case StateMachineSteps.DECOMPRESS_INDEX:
-                JSONArray jsonArray = null;
-                try {
-                    jsonArray = new JSONArray(new String(content));
-                    int nItems = jsonArray.length();
-                    this.info(nItems, "data packages in index");
-                    for (int i=0; i<nItems; i++) {
-                        JSONObject jsonObject = jsonArray.getJSONObject(i);
-                        this.info("IndexItem", jsonObject);
-                        SmuttyPackage pkg = SmuttyPackage.fromJson(jsonObject);
-                        SmuttyPackageDao pkgDao = appDatabase.smuttyPackageDao();
-                        pkgDao.insert(pkg);
-                        this.info("pkg inserted", pkg);
-                    }
-                } catch (JSONException e) {
-                    this.error("Json error", e.getMessage());
-                    return;
+            @Override
+            protected void onProgressUpdate(LogEntry... values) {
+                for (LogEntry entry : values) {
+                    activity_log(entry.getLevel(), entry.getMessage());
                 }
-                break;
-        }
+            }
+
+            @Override
+            protected void onPostExecute(Void aVoid) {
+                info(TAG, "Sync index finished");
+                refreshIndexTask = null;
+            }
+
+            @Override
+            protected void onCancelled(Void aVoid) {
+                warning(TAG, "Sync index cancelled");
+                refreshIndexTask = null;
+            }
+        };
+        // start task
+        refreshIndexTask.execute(indexUrl);
     }
 
     public void displayToast(String message) {
@@ -203,37 +155,47 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
         toast.show();
     }
 
-    interface LogLevel {
-        int CRITICAL = 0;
-        int ERROR = 1;
-        int WARNING = 2;
-        int INFO = 3;
-        int DEBUG = 4;
+    public void textViewLog(int level, String message) {
+        if (level < Logger.Level.CRITICAL || level > Logger.Level.DEBUG) {
+            throw new InvalidParameterException("Log level is outside allowed range");
+        }
+        TextView textView = (TextView) findViewById(R.id.textViewLogContent);
+        StringBuilder stringBuilder = new StringBuilder();
+        DateFormat dateFormat = DateFormat.getTimeInstance(DateFormat.MEDIUM);
+        Date now = new Date();
+        stringBuilder.setLength(0);
+        stringBuilder.append(dateFormat.format(now));
+        stringBuilder.append(" ");
+        stringBuilder.append(LEVELS[level]);
+        stringBuilder.append(" ");
+        stringBuilder.append(message);
+        stringBuilder.append("\n");
+        textView.append(stringBuilder.toString());
     }
 
-    private void log(int level, Object... objects) {
+    private void activity_log(int level, Object... objects) {
         String message = TextUtils.join(" ", objects);
         switch (level) {
-            case LogLevel.CRITICAL:
+            case Logger.Level.CRITICAL:
                 Log.e(TAG, message);
-                uiLogger.critical(message);
+                textViewLog(level, message);
                 displayToast(message);
                 break;
-            case LogLevel.ERROR:
+            case Logger.Level.ERROR:
                 Log.e(TAG, message);
-                uiLogger.error(message);
+                textViewLog(level, message);
                 displayToast(message);
                 break;
-            case LogLevel.WARNING:
+            case Logger.Level.WARNING:
                 Log.w(TAG, message);
-                uiLogger.warning(message);
+                textViewLog(level, message);
                 break;
-            case LogLevel.INFO:
-                uiLogger.info(message);
+            case Logger.Level.INFO:
+                textViewLog(level, message);
                 Log.i(TAG, message);
                 break;
-            case LogLevel.DEBUG:
-//                uiLogger.debug(message);
+            case Logger.Level.DEBUG:
+                textViewLog(level, message);
                 Log.d(TAG, message);
                 break;
             default:
@@ -243,26 +205,26 @@ public class MainActivity extends AppCompatActivity implements FinishedDownloadR
 
     @Override
     public void debug(Object... objects) {
-        log(LogLevel.DEBUG, objects);
+        activity_log(Logger.Level.DEBUG, objects);
     }
 
     @Override
     public void info(Object... objects) {
-        log(LogLevel.INFO, objects);
+        activity_log(Logger.Level.INFO, objects);
     }
 
     @Override
     public void warning(Object... objects) {
-        log(LogLevel.WARNING, objects);
+        activity_log(Logger.Level.WARNING, objects);
     }
 
     @Override
     public void error(Object... objects) {
-        log(LogLevel.ERROR, objects);
+        activity_log(Logger.Level.ERROR, objects);
     }
 
     @Override
     public void critical(Object... objects) {
-        log(LogLevel.CRITICAL, objects);
+        activity_log(Logger.Level.CRITICAL, objects);
     }
 }

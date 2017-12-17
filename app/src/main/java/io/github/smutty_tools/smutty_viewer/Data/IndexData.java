@@ -1,7 +1,5 @@
 package io.github.smutty_tools.smutty_viewer.Data;
 
-import android.util.Log;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
