@@ -109,4 +109,11 @@ public class SmuttyPackage {
     public void setHasTags(boolean hasTags) {
         this.hasTags = hasTags;
     }
+
+    public String getPackageFile() {
+        StringBuffer buf = new StringBuffer(md5);
+        buf.append('_');
+        buf.append(fileName);
+        return buf.toString();
+    }
 }

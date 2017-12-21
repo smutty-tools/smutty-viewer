@@ -8,6 +8,7 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
@@ -18,6 +19,7 @@ import android.view.MenuItem;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.security.InvalidParameterException;
 import java.text.DateFormat;
 import java.util.Date;
@@ -34,6 +36,8 @@ import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 public class MainActivity extends AppCompatActivity implements Logger {
 
     private static final String TAG = "MainActivity";
+    private static final String DIRECTORY_MAIN = "smutty-viewer";
+    private static final String SUB_DIRECTORY_INDEX = "indexes";
 
     private static final String[] LEVELS = {
         "CRITICAL",
@@ -46,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements Logger {
     private SharedPreferences settings = null;
     private AppDatabase appDatabase = null;
     private RefreshIndexTask refreshIndexTask = null;
+    private File storageDirectory = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +58,7 @@ public class MainActivity extends AppCompatActivity implements Logger {
         setContentView(R.layout.activity_main);
         appDatabase = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "smutty_viewer").build();
         settings = PreferenceManager.getDefaultSharedPreferences(this);
+        storageDirectory = new File(Environment.getExternalStorageDirectory(), DIRECTORY_MAIN);
     }
 
     @Override
@@ -123,8 +129,13 @@ public class MainActivity extends AppCompatActivity implements Logger {
             displayToast("Sync index already running");
             return;
         }
+        // verify storage
+        if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+            displayToast("External storage not available for writing");
+            return;
+        }
         // setup task
-        refreshIndexTask = new RefreshIndexTask(appDatabase) {
+        refreshIndexTask = new RefreshIndexTask(appDatabase, new File(storageDirectory, SUB_DIRECTORY_INDEX)) {
 
             @Override
             protected void onProgressUpdate(LogEntry... values) {
@@ -135,13 +146,13 @@ public class MainActivity extends AppCompatActivity implements Logger {
 
             @Override
             protected void onPostExecute(Void aVoid) {
-                info(TAG, "Sync index finished");
+                info("Sync index finished");
                 refreshIndexTask = null;
             }
 
             @Override
             protected void onCancelled(Void aVoid) {
-                warning(TAG, "Sync index cancelled");
+                warning("Sync index cancelled");
                 refreshIndexTask = null;
             }
         };
