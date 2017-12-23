@@ -107,19 +107,21 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
         // setup progress bar
         int nItems = jsonArray.length();
         maximumProgress = nItems;
-        publishMessage(Level.INFO, nItems, "packages in index");
+        publishMessage(Level.INFO, "Index references " + nItems + " packages");
         // check cancel between operations
         if (isCancelled()) {
             return;
         }
+        // clearing packages from database
+        SmuttyPackageDao pkgDao = appDatabase.smuttyPackageDao();
+        publishMessage(Level.INFO, "Clearing package database");
+        pkgDao.truncate();
         // process each entry and act accordingly
-        publishMessage(Level.INFO, nItems, "Checking packages ...");
-        // TODO: clear packages in database
+        publishMessage(Level.INFO, "Checking packages status...");
         for (progress = 0; progress < nItems; progress++) {
             JSONObject jsonObject = jsonArray.getJSONObject(progress);
             // store in database
             SmuttyPackage pkg = SmuttyPackage.fromJson(jsonObject);
-            SmuttyPackageDao pkgDao = appDatabase.smuttyPackageDao();
             pkgDao.insert(pkg);
             // download package file if necessary
             String packageFile = pkg.getPackageFile();
@@ -135,9 +137,11 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
     private void searchExistingFiles() {
         indexFiles.clear();
         indexFiles.addAll(Arrays.asList(baseDirectory.listFiles()));
+        publishMessage(Level.INFO, "Found", indexFiles.size(), "packages on disk");
     }
 
     private void removeUnusedFiles() {
+        publishMessage(Level.INFO, "Deleting", indexFiles.size(), "obsolete packages");
         for (File file : indexFiles) {
             publishMessage(Level.DEBUG, "Deleting unused file " + file.toString());
             file.delete();
@@ -150,11 +154,9 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
         try {
             publishMessage(Level.INFO, "Listing current files");
             searchExistingFiles();
-            Log.d(TAG, Integer.toString(indexFiles.size()) + " files on disk before synchronization");
             for (String str : strings) {
                 refreshIndex(str);
             }
-            Log.d(TAG, Integer.toString(indexFiles.size()) + " files not seen during synchronization, removing them");
             removeUnusedFiles();
         }
         catch (SmuttyException e) {
