@@ -30,7 +30,7 @@ public class Utils {
         }
     }
 
-    public static void SaveToFile(InputStream inputStream, File outputFile) throws IOException {
+    public static void InputToFile(InputStream inputStream, File outputFile) throws IOException {
         OutputStream outputStream = new FileOutputStream(outputFile);
         Copy(inputStream, outputStream);
         outputStream.close();
@@ -39,11 +39,11 @@ public class Utils {
     public static int DownloadUrlToFile(URL url, File outputFile) throws IOException {
         URLConnection urlConnection = url.openConnection();
         int contentLength = urlConnection.getContentLength();
-        SaveToFile(urlConnection.getInputStream(), outputFile);
+        InputToFile(urlConnection.getInputStream(), outputFile);
         return contentLength;
     }
 
-    public static String toHexString(byte[] bytes) {
+    public static String ToHexString(byte[] bytes) {
         // Source: https://stackoverflow.com/a/9855338/5973357
         char[] hexChars = new char[bytes.length << 1];
         for (int j = 0; j < bytes.length; j++) {
@@ -54,26 +54,26 @@ public class Utils {
         return new String(hexChars);
     }
 
-    public static String md5(File inputFile) {
+    public static String FileMd5(File inputFile) {
         try {
             FileInputStream inputStream = new FileInputStream(inputFile);
-            String result = hash(HASH_MD5, inputStream);
+            String result = HashAlgorithmInput(HASH_MD5, inputStream);
             return result;
         } catch (FileNotFoundException e) {
             return null;
         }
     }
 
-    public static String hash(String algo, InputStream inputStream) {
+    public static String HashAlgorithmInput(String algorithm, InputStream inputStream) {
         try {
-            MessageDigest md = MessageDigest.getInstance(algo);
+            MessageDigest md = MessageDigest.getInstance(algorithm);
             int bytesRead;
             byte[] buffer = new byte[HASH_BUFFER_LENGTH];
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 md.update(buffer, 0, bytesRead);
             }
             byte hash[] = md.digest();
-            return Utils.toHexString(hash);
+            return Utils.ToHexString(hash);
         } catch (NoSuchAlgorithmException e) {
             return null;
         } catch (IOException e) {
