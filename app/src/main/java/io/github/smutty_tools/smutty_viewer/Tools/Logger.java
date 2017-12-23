@@ -10,6 +10,7 @@ public interface Logger {
         int DEBUG = 4;
     }
 
+    void log(int level, Object... objects);
     void debug(Object... objects);
     void info(Object... objects);
     void warning(Object... objects);
