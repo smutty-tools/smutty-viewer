@@ -16,6 +16,8 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -27,30 +29,53 @@ import java.util.Date;
 import io.github.smutty_tools.smutty_viewer.AsyncTasks.RefreshIndexTask;
 import io.github.smutty_tools.smutty_viewer.Data.AppDatabase;
 import io.github.smutty_tools.smutty_viewer.R;
-import io.github.smutty_tools.smutty_viewer.Tools.LogEntry;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 
 /**
  * Main activity class
  */
-public class MainActivity extends AppCompatActivity implements Logger {
+public class MainActivity extends AppCompatActivity implements Logger, RefreshIndexTask.FinishedNotifier {
+
+    public static class WidgetCache {
+        public final ProgressBar progressBar;
+        public final TextView textView;
+
+        public WidgetCache(MainActivity activity) {
+            progressBar = (ProgressBar) activity.findViewById(R.id.progressBar);
+            textView = (TextView) activity.findViewById(R.id.textViewLogContent);
+        }
+
+        public void updateProgress(int current, int maximum) {
+            // progressBar.setMin(0); // API 26 minimum
+            progressBar.setProgress(current);
+            progressBar.setMax(maximum);
+        }
+
+        public void showProgress() {
+            progressBar.setVisibility(View.VISIBLE);
+        }
+
+        public void hideProgress() {
+            progressBar.setVisibility(View.GONE);
+        }
+    }
 
     private static final String TAG = "MainActivity";
     private static final String DIRECTORY_MAIN = "smutty-viewer";
     private static final String SUB_DIRECTORY_INDEX = "indexes";
-
     private static final String[] LEVELS = {
-        "CRITICAL",
-        "ERROR",
-        "WARNING",
-        "INFO",
-        "DEBUG"
+            "CRITICAL",
+            "ERROR",
+            "WARNING",
+            "INFO",
+            "DEBUG"
     };
 
     private SharedPreferences settings = null;
     private AppDatabase appDatabase = null;
     private RefreshIndexTask refreshIndexTask = null;
     private File storageDirectory = null;
+    private WidgetCache widgetCache = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements Logger {
         appDatabase = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "smutty_viewer").build();
         settings = PreferenceManager.getDefaultSharedPreferences(this);
         storageDirectory = new File(Environment.getExternalStorageDirectory(), DIRECTORY_MAIN);
+        widgetCache = new WidgetCache(this);
     }
 
     @Override
@@ -72,6 +98,24 @@ public class MainActivity extends AppCompatActivity implements Logger {
         super.onDestroy();
     }
 
+    private void startRefreshAsyncTask(String indexUrl) {
+        // skip if already running
+        if (refreshIndexTask != null) {
+            displayToast("Sync index already running");
+            return;
+        }
+        refreshIndexTask = new RefreshIndexTask(this, widgetCache.progressBar, this, appDatabase, new File(storageDirectory, SUB_DIRECTORY_INDEX));
+        refreshIndexTask.execute(indexUrl);
+    }
+
+    @Override
+    public void taskFinished(RefreshIndexTask task) {
+        if (!refreshIndexTask.equals(task)) {
+            warning("Task finished", task, "different from task lanched", refreshIndexTask);
+        }
+        refreshIndexTask = null;
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
@@ -81,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements Logger {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch(item.getItemId()) {
+        switch (item.getItemId()) {
             case R.id.action_share:
                 return true; // consume the event
             case R.id.action_refresh:
@@ -97,8 +141,7 @@ public class MainActivity extends AppCompatActivity implements Logger {
     }
 
     public NetworkInfo getActiveNetworkInfo() {
-        ConnectivityManager connectivityManager = (ConnectivityManager)
-                getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         if (connectivityManager == null) {
             return null;
         }
@@ -124,40 +167,13 @@ public class MainActivity extends AppCompatActivity implements Logger {
             displayToast("Sync URL not provided");
             return;
         }
-        // skip if already running
-        if (refreshIndexTask != null) {
-            displayToast("Sync index already running");
-            return;
-        }
         // verify storage
         if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
             displayToast("External storage not available for writing");
             return;
         }
         // setup task
-        refreshIndexTask = new RefreshIndexTask(appDatabase, new File(storageDirectory, SUB_DIRECTORY_INDEX)) {
-
-            @Override
-            protected void onProgressUpdate(LogEntry... values) {
-                for (LogEntry entry : values) {
-                    activity_log(entry.getLevel(), entry.getMessage());
-                }
-            }
-
-            @Override
-            protected void onPostExecute(Void aVoid) {
-                info("Sync index finished");
-                refreshIndexTask = null;
-            }
-
-            @Override
-            protected void onCancelled(Void aVoid) {
-                warning("Sync index cancelled");
-                refreshIndexTask = null;
-            }
-        };
-        // start task
-        refreshIndexTask.execute(indexUrl);
+        startRefreshAsyncTask(indexUrl);
     }
 
     public void displayToast(String message) {
@@ -170,7 +186,6 @@ public class MainActivity extends AppCompatActivity implements Logger {
         if (level < Logger.Level.CRITICAL || level > Logger.Level.DEBUG) {
             throw new InvalidParameterException("Log level is outside allowed range");
         }
-        TextView textView = (TextView) findViewById(R.id.textViewLogContent);
         StringBuilder stringBuilder = new StringBuilder();
         DateFormat dateFormat = DateFormat.getTimeInstance(DateFormat.MEDIUM);
         Date now = new Date();
@@ -181,10 +196,11 @@ public class MainActivity extends AppCompatActivity implements Logger {
         stringBuilder.append(" ");
         stringBuilder.append(message);
         stringBuilder.append("\n");
-        textView.append(stringBuilder.toString());
+        widgetCache.textView.append(stringBuilder.toString());
     }
 
-    private void activity_log(int level, Object... objects) {
+    @Override
+    public void log(int level, Object... objects) {
         String message = TextUtils.join(" ", objects);
         switch (level) {
             case Logger.Level.CRITICAL:
@@ -216,26 +232,26 @@ public class MainActivity extends AppCompatActivity implements Logger {
 
     @Override
     public void debug(Object... objects) {
-        activity_log(Logger.Level.DEBUG, objects);
+        log(Logger.Level.DEBUG, objects);
     }
 
     @Override
     public void info(Object... objects) {
-        activity_log(Logger.Level.INFO, objects);
+        log(Logger.Level.INFO, objects);
     }
 
     @Override
     public void warning(Object... objects) {
-        activity_log(Logger.Level.WARNING, objects);
+        log(Logger.Level.WARNING, objects);
     }
 
     @Override
     public void error(Object... objects) {
-        activity_log(Logger.Level.ERROR, objects);
+        log(Logger.Level.ERROR, objects);
     }
 
     @Override
     public void critical(Object... objects) {
-        activity_log(Logger.Level.CRITICAL, objects);
+        log(Logger.Level.CRITICAL, objects);
     }
 }
