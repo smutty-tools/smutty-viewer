@@ -26,25 +26,13 @@ import io.github.smutty_tools.smutty_viewer.Decompress.Decompressor;
 import io.github.smutty_tools.smutty_viewer.Tools.LogEntry;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger.Level;
+import io.github.smutty_tools.smutty_viewer.Tools.LogProgressBundle;
 import io.github.smutty_tools.smutty_viewer.Tools.Utils;
 
-public class RefreshIndexTask extends AsyncTask<String, RefreshIndexTask.ProgressBundle, Void> {
+public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void> {
 
     public interface FinishedNotifier {
         void taskFinished(RefreshIndexTask task);
-    }
-
-    public static class ProgressBundle {
-
-        public final LogEntry logEntry;
-        public final int progress;
-        public final int maxProgress;
-
-        public ProgressBundle(LogEntry logEntry, int progress, int maxProgress) {
-            this.logEntry = logEntry;
-            this.progress = progress;
-            this.maxProgress = maxProgress;
-        }
     }
 
     public static String TAG = "RefreshIndexTask";
@@ -74,7 +62,7 @@ public class RefreshIndexTask extends AsyncTask<String, RefreshIndexTask.Progres
 
     private void publishMessage(int level, Object... objects) {
         LogEntry logEntry = new LogEntry(level, TextUtils.join(" ", objects));
-        publishProgress(new ProgressBundle(logEntry, progress, maximumProgress));
+        publishProgress(new LogProgressBundle(logEntry, progress, maximumProgress));
     }
 
     private void downloadPackage(String packageName, String md5) throws IOException {
@@ -146,8 +134,8 @@ public class RefreshIndexTask extends AsyncTask<String, RefreshIndexTask.Progres
     }
 
     @Override
-    protected void onProgressUpdate(ProgressBundle... values) {
-        for (RefreshIndexTask.ProgressBundle bundle : values) {
+    protected void onProgressUpdate(LogProgressBundle... values) {
+        for (LogProgressBundle bundle : values) {
             Logger logger = loggerWeakReference.get();
             LogEntry entry = bundle.logEntry;
             if (entry != null && logger != null) {
