@@ -23,10 +23,11 @@ import io.github.smutty_tools.smutty_viewer.Data.AppDatabase;
 import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackage;
 import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackageDao;
 import io.github.smutty_tools.smutty_viewer.Decompress.Decompressor;
+import io.github.smutty_tools.smutty_viewer.Exceptions.SmuttyException;
 import io.github.smutty_tools.smutty_viewer.Tools.LogEntry;
+import io.github.smutty_tools.smutty_viewer.Tools.LogProgressBundle;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 import io.github.smutty_tools.smutty_viewer.Tools.Logger.Level;
-import io.github.smutty_tools.smutty_viewer.Tools.LogProgressBundle;
 import io.github.smutty_tools.smutty_viewer.Tools.Utils;
 
 public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void> {
@@ -35,7 +36,7 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
         void taskFinished(RefreshIndexTask task);
     }
 
-    public static String TAG = "RefreshIndexTask";
+    public static final String TAG = "RefreshIndexTask";
 
     private WeakReference<Logger> loggerWeakReference;
     private WeakReference<ProgressBar> progressBarWeakReference;
@@ -65,22 +66,28 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
         publishProgress(new LogProgressBundle(logEntry, progress, maximumProgress));
     }
 
-    private void downloadPackage(String packageName, String md5) throws IOException {
-        baseDirectory.mkdirs();
-        // TODO: use subdirectories to distribute directory load .../a/b/c/d/abcdefgh
-        File outputFile = new File(baseDirectory, md5);
-        if (outputFile.exists()) {
-            Log.d(TAG, "Skipping download, file already exists for package " + packageName);
-            totalBytes += outputFile.length();
-            return;
-        }
-        URL url = baseUri.resolve(packageName).toURL();
-        int contentLength = Utils.DownloadUrlToFile(url, outputFile);
-        // TODO: check actual md5 content
-        totalBytes += contentLength;
+    private boolean isHashValid(File outputFile, String md5) {
+        return Utils.md5(outputFile).toLowerCase().equals(md5.toLowerCase());
     }
 
-    private void refreshIndex(String indexUrl) throws IOException, JSONException, URISyntaxException {
+    private void downloadPackage(String packageName, String hash) throws IOException, SmuttyException {
+        baseDirectory.mkdirs();
+        // TODO: use subdirectories to distribute directory load .../a/b/c/d/abcdefgh
+        File outputFile = new File(baseDirectory, hash);
+        if (outputFile.exists() && isHashValid(outputFile, hash)) {
+            publishMessage(Level.DEBUG, "File " + packageName + " exists with valid hash");
+        } else {
+            URL url = baseUri.resolve(packageName).toURL();
+            Utils.DownloadUrlToFile(url, outputFile);
+            publishMessage(Level.DEBUG, "File " + packageName + " downloaded");
+            if (!isHashValid(outputFile, hash)) {
+                throw new SmuttyException("Package file has invalid checksum");
+            }
+        }
+        totalBytes += outputFile.length();
+    }
+
+    private void refreshIndex(String indexUrl) throws IOException, JSONException, URISyntaxException, SmuttyException {
         progress = 0;
         maximumProgress = 1;
         publishMessage(Level.INFO, "Synchronizing index");
@@ -97,16 +104,24 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
         int nItems = jsonArray.length();
         maximumProgress = nItems;
         publishMessage(Level.INFO, nItems, "packages in index");
-        // store in database
+        // check cancel between operations
+        if (isCancelled()) {
+            return;
+        }
+        // process each entry and act accordingly
         for (progress = 0; progress < nItems; progress++) {
-
             JSONObject jsonObject = jsonArray.getJSONObject(progress);
+            // store in database
             SmuttyPackage pkg = SmuttyPackage.fromJson(jsonObject);
             SmuttyPackageDao pkgDao = appDatabase.smuttyPackageDao();
             pkgDao.insert(pkg);
+            // download package file if necessary
             String packageFile = pkg.getPackageFile();
             downloadPackage(packageFile, pkg.getMd5());
-            publishMessage(Level.DEBUG, "File " + packageFile + " downloaded");
+            // check cancel between operations
+            if (isCancelled()) {
+                return;
+            }
         }
         publishMessage(Level.INFO, "Total index size", (long) Math.ceil((double) totalBytes / 1048576), "Mbytes");
         // TODO: purge unused files
@@ -118,9 +133,13 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
             for (String str : strings) {
                 refreshIndex(str);
             }
-        } catch (Exception e) {
-            Log.d(TAG, e.toString());
-            cancel(false);
+        }
+        catch (SmuttyException e) {
+            publishMessage(Level.ERROR, e.getMessage());
+        }
+        catch (Exception e) {
+            publishMessage(Level.ERROR, e.getMessage());
+            Log.e(TAG, Log.getStackTraceString(e));
         }
         return null;
     }
