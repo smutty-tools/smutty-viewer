@@ -75,7 +75,6 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
     }
 
     private void downloadPackage(String packageName, String hash) throws IOException, SmuttyException {
-        baseDirectory.mkdirs();
         // TODO: use subdirectories to distribute directory load : abcdefgh => a/b/c/d/abcdefgh
         File outputFile = new File(baseDirectory, hash);
         if (outputFile.exists() && isHashValid(outputFile, hash)) {
@@ -135,6 +134,7 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
     }
 
     private void searchExistingFiles() {
+        publishMessage(Level.INFO, "Listing current files");
         indexFiles.clear();
         indexFiles.addAll(Arrays.asList(baseDirectory.listFiles()));
         publishMessage(Level.INFO, "Found", indexFiles.size(), "packages on disk");
@@ -142,17 +142,29 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
 
     private void removeUnusedFiles() {
         publishMessage(Level.INFO, "Deleting", indexFiles.size(), "obsolete packages");
+        int count = 0;
         for (File file : indexFiles) {
             publishMessage(Level.DEBUG, "Deleting unused file " + file.toString());
-            file.delete();
+            if (file.delete()) {
+                count++;
+            }
+        }
+        if (count != indexFiles.size()) {
+            publishMessage(Level.WARNING, "Only", count, "files deleted, should have been", indexFiles.size());
         }
         indexFiles.clear();
     }
 
     @Override
     protected Void doInBackground(String... strings) {
+        long start = System.currentTimeMillis();
         try {
-            publishMessage(Level.INFO, "Listing current files");
+            // ensures target directory exists
+            baseDirectory.mkdirs();
+            if (!baseDirectory.exists() || !baseDirectory.isDirectory()) {
+                throw new SmuttyException("Invalid storage " + baseDirectory.toString());
+            }
+            // manage index files
             searchExistingFiles();
             for (String str : strings) {
                 refreshIndex(str);
@@ -166,6 +178,8 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
             publishMessage(Level.ERROR, e.getMessage());
             Log.e(TAG, Log.getStackTraceString(e));
         }
+        long end = System.currentTimeMillis();
+        publishMessage(Level.INFO, "Time spent", (int) (((float)(end-start))/1000.0), "seconds");
         return null;
     }
 
