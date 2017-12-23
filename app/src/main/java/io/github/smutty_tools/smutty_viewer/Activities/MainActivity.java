@@ -44,20 +44,6 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
             progressBar = (ProgressBar) activity.findViewById(R.id.progressBar);
             textView = (TextView) activity.findViewById(R.id.textViewLogContent);
         }
-
-        public void updateProgress(int current, int maximum) {
-            // progressBar.setMin(0); // API 26 minimum
-            progressBar.setProgress(current);
-            progressBar.setMax(maximum);
-        }
-
-        public void showProgress() {
-            progressBar.setVisibility(View.VISIBLE);
-        }
-
-        public void hideProgress() {
-            progressBar.setVisibility(View.GONE);
-        }
     }
 
     private static final String TAG = "MainActivity";
@@ -222,7 +208,6 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
                 Log.i(TAG, message);
                 break;
             case Logger.Level.DEBUG:
-                textViewLog(level, message);
                 Log.d(TAG, message);
                 break;
             default:
