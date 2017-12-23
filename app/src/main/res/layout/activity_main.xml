@@ -12,6 +12,16 @@
         android:orientation="vertical">
 
 
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="14dp"
+            android:visibility="gone"
+            tools:layout_editor_absoluteX="66dp"
+            tools:layout_editor_absoluteY="0dp"
+            tools:visibility="visible" />
+
         <TextView
             android:id="@+id/textViewLogHeader"
             android:layout_width="match_parent"
