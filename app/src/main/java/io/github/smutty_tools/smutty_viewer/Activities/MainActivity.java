@@ -110,7 +110,7 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
 
     @Override
     public void taskFinished(RefreshIndexTask task) {
-        if (!refreshIndexTask.equals(task)) {
+        if (refreshIndexTask != null && !refreshIndexTask.equals(task)) {
             warning("Task finished", task, "different from task lanched", refreshIndexTask);
         }
         refreshIndexTask = null;
