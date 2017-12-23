@@ -1,7 +1,5 @@
 package io.github.smutty_tools.smutty_viewer.Tools;
 
-import android.util.Log;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -47,11 +45,11 @@ public class Utils {
 
     public static String toHexString(byte[] bytes) {
         // Source: https://stackoverflow.com/a/9855338/5973357
-        char[] hexChars = new char[bytes.length * 2];
+        char[] hexChars = new char[bytes.length << 1];
         for (int j = 0; j < bytes.length; j++) {
             int v = bytes[j] & 0xFF;
             hexChars[j << 1] = HEX_ARRAY[v >>> 4];
-            hexChars[j << 1 + 1] = HEX_ARRAY[v & 0x0F];
+            hexChars[(j << 1) + 1] = HEX_ARRAY[v & 0x0F];
         }
         return new String(hexChars);
     }
@@ -60,7 +58,6 @@ public class Utils {
         try {
             FileInputStream inputStream = new FileInputStream(inputFile);
             String result = hash(HASH_MD5, inputStream);
-            Log.d(TAG, "MD5 for " + inputFile.toString() + " is " + result);
             return result;
         } catch (FileNotFoundException e) {
             return null;
@@ -73,7 +70,6 @@ public class Utils {
             int bytesRead;
             byte[] buffer = new byte[HASH_BUFFER_LENGTH];
             while ((bytesRead = inputStream.read(buffer)) != -1) {
-                Log.d(TAG, "Bytes read from input stream " + Integer.toString(bytesRead));
                 md.update(buffer, 0, bytesRead);
             }
             byte hash[] = md.digest();
