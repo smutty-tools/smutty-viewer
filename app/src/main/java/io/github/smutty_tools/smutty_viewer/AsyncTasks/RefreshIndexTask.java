@@ -18,6 +18,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Arrays;
+import java.util.HashSet;
 
 import io.github.smutty_tools.smutty_viewer.Data.AppDatabase;
 import io.github.smutty_tools.smutty_viewer.Data.SmuttyPackage;
@@ -48,6 +50,7 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
     private long totalBytes;
     private int progress;
     private int maximumProgress;
+    private HashSet<File> indexFiles;
 
     public RefreshIndexTask(Logger logger, ProgressBar progressBar, FinishedNotifier finishedNotifier, AppDatabase appDatabase, File baseDirectory) {
         this.loggerWeakReference = new WeakReference<>(logger);
@@ -59,6 +62,7 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
         this.totalBytes = 0;
         this.progress = 0;
         this.maximumProgress = 1;
+        this.indexFiles = new HashSet<>();
     }
 
     private void publishMessage(int level, Object... objects) {
@@ -67,12 +71,12 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
     }
 
     private boolean isHashValid(File outputFile, String md5) {
-        return Utils.md5(outputFile).toLowerCase().equals(md5.toLowerCase());
+        return Utils.FileMd5(outputFile).toLowerCase().equals(md5.toLowerCase());
     }
 
     private void downloadPackage(String packageName, String hash) throws IOException, SmuttyException {
         baseDirectory.mkdirs();
-        // TODO: use subdirectories to distribute directory load .../a/b/c/d/abcdefgh
+        // TODO: use subdirectories to distribute directory load : abcdefgh => a/b/c/d/abcdefgh
         File outputFile = new File(baseDirectory, hash);
         if (outputFile.exists() && isHashValid(outputFile, hash)) {
             publishMessage(Level.DEBUG, "File " + packageName + " exists with valid hash");
@@ -85,15 +89,15 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
             }
         }
         totalBytes += outputFile.length();
+        indexFiles.remove(outputFile);
     }
 
     private void refreshIndex(String indexUrl) throws IOException, JSONException, URISyntaxException, SmuttyException {
         progress = 0;
         maximumProgress = 1;
-        publishMessage(Level.INFO, "Synchronizing index");
+        publishMessage(Level.INFO, "Synchronizing index from " + indexUrl);
         URL url = new URL(indexUrl);
         baseUri = url.toURI().resolve(".");
-        Log.d(TAG, "baseUri=" + baseUri.toString());
         // fetch index
         URLConnection urlConnection = url.openConnection();
         InputStream in = urlConnection.getInputStream();
@@ -109,6 +113,8 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
             return;
         }
         // process each entry and act accordingly
+        publishMessage(Level.INFO, nItems, "Checking packages ...");
+        // TODO: clear packages in database
         for (progress = 0; progress < nItems; progress++) {
             JSONObject jsonObject = jsonArray.getJSONObject(progress);
             // store in database
@@ -124,15 +130,32 @@ public class RefreshIndexTask extends AsyncTask<String, LogProgressBundle, Void>
             }
         }
         publishMessage(Level.INFO, "Total index size", (long) Math.ceil((double) totalBytes / 1048576), "Mbytes");
-        // TODO: purge unused files
+    }
+
+    private void searchExistingFiles() {
+        indexFiles.clear();
+        indexFiles.addAll(Arrays.asList(baseDirectory.listFiles()));
+    }
+
+    private void removeUnusedFiles() {
+        for (File file : indexFiles) {
+            publishMessage(Level.DEBUG, "Deleting unused file " + file.toString());
+            file.delete();
+        }
+        indexFiles.clear();
     }
 
     @Override
     protected Void doInBackground(String... strings) {
         try {
+            publishMessage(Level.INFO, "Listing current files");
+            searchExistingFiles();
+            Log.d(TAG, Integer.toString(indexFiles.size()) + " files on disk before synchronization");
             for (String str : strings) {
                 refreshIndex(str);
             }
+            Log.d(TAG, Integer.toString(indexFiles.size()) + " files not seen during synchronization, removing them");
+            removeUnusedFiles();
         }
         catch (SmuttyException e) {
             publishMessage(Level.ERROR, e.getMessage());
