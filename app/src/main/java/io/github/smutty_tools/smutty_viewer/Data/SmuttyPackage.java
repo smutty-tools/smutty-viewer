@@ -1,119 +1,92 @@
 package io.github.smutty_tools.smutty_viewer.Data;
 
-import android.arch.persistence.room.ColumnInfo;
-import android.arch.persistence.room.Entity;
-import android.arch.persistence.room.PrimaryKey;
-import android.support.annotation.NonNull;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
-@Entity(tableName = "packages")
+import java.io.File;
+import java.net.URL;
+
+import io.github.smutty_tools.smutty_viewer.Tools.FileUtils;
+
 public class SmuttyPackage {
 
-    @PrimaryKey
-    @NonNull
-    private String md5;
-
-    @ColumnInfo(name = "referenced_in_index")
-    private boolean referencedInIndex;
-
-    @ColumnInfo(name = "file_name")
-    private String fileName;
-
-    @ColumnInfo(name = "content_type")
     private String contentType;
-
-    @ColumnInfo(name = "max_id")
-    private int maxId;
-
-    @ColumnInfo(name = "min_id")
     private int minId;
+    private int maxId;
+    private String hashDigest;
 
-    @ColumnInfo(name = "has_tags")
-    private boolean hasTags;
+    private File localFile;
+    private URL remoteURL;
+
+    // TODO: class property for directory storage ?
 
     public static SmuttyPackage fromJson(JSONObject jsonObject) throws JSONException {
         return new SmuttyPackage(
-                jsonObject.getString("md5"),
-                true, // referencedInIndex
-                jsonObject.getString("file"),
-                jsonObject.getString("type"),
-                jsonObject.getInt("max_id"),
-                jsonObject.getInt("min_id"),
-                jsonObject.getBoolean("tags"));
+            jsonObject.getString("content_type"),
+            jsonObject.getInt("min_id"),
+            jsonObject.getInt("max_id"),
+            jsonObject.getString("hash_digest"));
     }
 
-    public SmuttyPackage(String md5, boolean referencedInIndex, String fileName, String contentType, int maxId, int minId, boolean hasTags) {
-        this.md5 = md5;
-        this.referencedInIndex = referencedInIndex;
-        this.fileName = fileName;
+    public SmuttyPackage(String contentType, int minId, int maxId, String hashDigest) {
         this.contentType = contentType;
-        this.maxId = maxId;
         this.minId = minId;
-        this.hasTags = hasTags;
+        this.maxId = maxId;
+        this.hashDigest = hashDigest;
+        this.localFile = null;
+        this.remoteURL = null;
     }
 
-    public String getMd5() {
-        return md5;
+    public boolean isLocalFileValid() {
+        return localFile.exists() && FileUtils.IsFileMd5Valid(localFile, hashDigest);
     }
 
-    public void setMd5(String md5) {
-        this.md5 = md5;
+    public String getName() {
+        StringBuffer buf = new StringBuffer(contentType);
+        buf.append('-');
+        buf.append(Integer.toString(minId));
+        buf.append('-');
+        buf.append(Integer.toString(maxId));
+        buf.append('-');
+        buf.append(hashDigest);
+        return buf.toString();
     }
 
-    public boolean isReferencedInIndex() {
-        return referencedInIndex;
-    }
-
-    public void setReferencedInIndex(boolean referencedInIndex) {
-        this.referencedInIndex = referencedInIndex;
-    }
-
-    public String getFileName() {
-        return fileName;
-    }
-
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
+    public String getPackageFileName() {
+        StringBuffer buf = new StringBuffer(getName());
+        buf.append(".jsonl.xz");
+        return buf.toString();
     }
 
     public String getContentType() {
         return contentType;
     }
 
-    public void setContentType(String contentType) {
-        this.contentType = contentType;
+    public int getMinId() {
+        return minId;
     }
 
     public int getMaxId() {
         return maxId;
     }
 
-    public void setMaxId(int maxId) {
-        this.maxId = maxId;
+    public String getHashDigest() {
+        return hashDigest;
     }
 
-    public int getMinId() {
-        return minId;
+    public File getLocalFile() {
+        return localFile;
     }
 
-    public void setMinId(int minId) {
-        this.minId = minId;
+    public void setLocalFile(File localFile) {
+        this.localFile = localFile;
     }
 
-    public boolean isHasTags() {
-        return hasTags;
+    public URL getRemoteURL() {
+        return remoteURL;
     }
 
-    public void setHasTags(boolean hasTags) {
-        this.hasTags = hasTags;
-    }
-
-    public String getPackageFile() {
-        StringBuffer buf = new StringBuffer(md5);
-        buf.append('_');
-        buf.append(fileName);
-        return buf.toString();
+    public void setRemoteURL(URL remoteURL) {
+        this.remoteURL = remoteURL;
     }
 }

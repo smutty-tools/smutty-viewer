@@ -6,12 +6,17 @@
         android:id="@+id/action_share"
         android:icon="@android:drawable/ic_menu_share"
         android:title="@string/share_label"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_refresh"
         android:icon="@android:drawable/ic_popup_sync"
         android:title="@string/refresh_label"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_view"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="@string/view_label"
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_settings"
         android:icon="@android:drawable/ic_menu_preferences"

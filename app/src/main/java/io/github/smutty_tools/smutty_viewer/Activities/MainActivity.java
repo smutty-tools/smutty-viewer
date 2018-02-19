@@ -1,7 +1,6 @@
 package io.github.smutty_tools.smutty_viewer.Activities;
 
 
-import android.arch.persistence.room.Room;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -11,36 +10,31 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.security.InvalidParameterException;
-import java.text.DateFormat;
-import java.util.Date;
+import java.net.MalformedURLException;
 
-import io.github.smutty_tools.smutty_viewer.AsyncTasks.RefreshIndexTask;
-import io.github.smutty_tools.smutty_viewer.Data.AppDatabase;
+import io.github.smutty_tools.smutty_viewer.AsyncTasks.RefreshTask;
+import io.github.smutty_tools.smutty_viewer.Exceptions.SmuttyException;
 import io.github.smutty_tools.smutty_viewer.R;
-import io.github.smutty_tools.smutty_viewer.Tools.Logger;
 
 /**
  * Main activity class
  */
-public class MainActivity extends AppCompatActivity implements Logger, RefreshIndexTask.FinishedNotifier {
+public class MainActivity extends AppCompatActivity implements RefreshTask.FinishedNotifier {
 
     public static class WidgetCache {
-        public final ProgressBar progressBar;
-        public final TextView textView;
+        final ProgressBar progressBar;
+        final TextView textView;
 
-        public WidgetCache(MainActivity activity) {
+        WidgetCache(MainActivity activity) {
             progressBar = (ProgressBar) activity.findViewById(R.id.progressBar);
             textView = (TextView) activity.findViewById(R.id.textViewLogContent);
         }
@@ -49,17 +43,9 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
     private static final String TAG = "MainActivity";
     private static final String DIRECTORY_MAIN = "smutty-viewer";
     private static final String SUB_DIRECTORY_INDEX = "indexes";
-    private static final String[] LEVELS = {
-            "CRITICAL",
-            "ERROR",
-            "WARNING",
-            "INFO",
-            "DEBUG"
-    };
 
     private SharedPreferences settings = null;
-    private AppDatabase appDatabase = null;
-    private RefreshIndexTask refreshIndexTask = null;
+    private RefreshTask refreshTask = null;
     private File storageDirectory = null;
     private WidgetCache widgetCache = null;
 
@@ -67,7 +53,6 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        appDatabase = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "smutty_viewer").build();
         settings = PreferenceManager.getDefaultSharedPreferences(this);
         storageDirectory = new File(Environment.getExternalStorageDirectory(), DIRECTORY_MAIN);
         widgetCache = new WidgetCache(this);
@@ -76,30 +61,36 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
     @Override
     protected void onDestroy() {
         // cancel AsyncTasks
-        if (refreshIndexTask != null) {
-            info("Canceling refresh index task");
-            refreshIndexTask.cancel(true);
-            refreshIndexTask = null;
+        if (refreshTask != null) {
+            Log.i(TAG, "Canceling refresh task");
+            refreshTask.cancel(true);
+            refreshTask = null;
         }
         super.onDestroy();
     }
 
     private void startRefreshAsyncTask(String indexUrl) {
         // skip if already running
-        if (refreshIndexTask != null) {
-            displayToast("Sync index already running");
+        if (refreshTask != null) {
+            displayToast("Sync already running");
             return;
         }
-        refreshIndexTask = new RefreshIndexTask(this, widgetCache.progressBar, this, appDatabase, new File(storageDirectory, SUB_DIRECTORY_INDEX));
-        refreshIndexTask.execute(indexUrl);
+        try {
+            refreshTask = new RefreshTask(widgetCache.progressBar, this, new File(storageDirectory, SUB_DIRECTORY_INDEX), indexUrl);
+        }
+        catch (SmuttyException e) {
+            Log.e(TAG, e.getMessage());
+            displayToast("Error while refreshing");
+        }
+        refreshTask.execute();
     }
 
     @Override
-    public void taskFinished(RefreshIndexTask task) {
-        if (refreshIndexTask != null && !refreshIndexTask.equals(task)) {
-            warning("Task finished", task, "different from task lanched", refreshIndexTask);
+    public void refreshTaskFinished(RefreshTask task) {
+        if (refreshTask != null && !refreshTask.equals(task)) {
+            Log.w(TAG, "Task finished" + task + "different from task lanched" + refreshTask);
         }
-        refreshIndexTask = null;
+        refreshTask = null;
     }
 
     @Override
@@ -116,6 +107,9 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
                 return true; // consume the event
             case R.id.action_refresh:
                 refreshAction();
+                return true; // consume the event
+            case R.id.action_view:
+                viewAction();
                 return true; // consume the event
             case R.id.action_settings:
                 Intent intent = new Intent(this, SettingsActivity.class);
@@ -162,81 +156,13 @@ public class MainActivity extends AppCompatActivity implements Logger, RefreshIn
         startRefreshAsyncTask(indexUrl);
     }
 
+    private void viewAction() {
+        Log.d(TAG, "viewAction");
+    }
+
     public void displayToast(String message) {
         int duration = Toast.LENGTH_SHORT;
         Toast toast = Toast.makeText(this, message, duration);
         toast.show();
-    }
-
-    public void textViewLog(int level, String message) {
-        if (level < Logger.Level.CRITICAL || level > Logger.Level.DEBUG) {
-            throw new InvalidParameterException("Log level is outside allowed range");
-        }
-        StringBuilder stringBuilder = new StringBuilder();
-        DateFormat dateFormat = DateFormat.getTimeInstance(DateFormat.MEDIUM);
-        Date now = new Date();
-        stringBuilder.setLength(0);
-        stringBuilder.append(dateFormat.format(now));
-        stringBuilder.append(" ");
-        stringBuilder.append(LEVELS[level]);
-        stringBuilder.append(" ");
-        stringBuilder.append(message);
-        stringBuilder.append("\n");
-        widgetCache.textView.append(stringBuilder.toString());
-    }
-
-    @Override
-    public void log(int level, Object... objects) {
-        String message = TextUtils.join(" ", objects);
-        switch (level) {
-            case Logger.Level.CRITICAL:
-                Log.e(TAG, message);
-                textViewLog(level, message);
-                displayToast(message);
-                break;
-            case Logger.Level.ERROR:
-                Log.e(TAG, message);
-                textViewLog(level, message);
-                displayToast(message);
-                break;
-            case Logger.Level.WARNING:
-                Log.w(TAG, message);
-                textViewLog(level, message);
-                break;
-            case Logger.Level.INFO:
-                textViewLog(level, message);
-                Log.i(TAG, message);
-                break;
-            case Logger.Level.DEBUG:
-                Log.d(TAG, message);
-                break;
-            default:
-                throw new IllegalArgumentException("Logging level " + Integer.toString(level) + " is invalid");
-        }
-    }
-
-    @Override
-    public void debug(Object... objects) {
-        log(Logger.Level.DEBUG, objects);
-    }
-
-    @Override
-    public void info(Object... objects) {
-        log(Logger.Level.INFO, objects);
-    }
-
-    @Override
-    public void warning(Object... objects) {
-        log(Logger.Level.WARNING, objects);
-    }
-
-    @Override
-    public void error(Object... objects) {
-        log(Logger.Level.ERROR, objects);
-    }
-
-    @Override
-    public void critical(Object... objects) {
-        log(Logger.Level.CRITICAL, objects);
     }
 }
